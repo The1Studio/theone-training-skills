@@ -1,6 +1,6 @@
 ---
 name: github-pr-review
-description: Provides comprehensive GitHub PR review with inline suggested changes that can be applied via GitHub's web UI "Commit suggestion" button. Triggers when reviewing PRs, analyzing code changes, or when user requests PR review with applicable suggestions.
+description: Comprehensive GitHub PR review with inline suggestions, approval/rejection criteria, and technology-agnostic checklists. Triggers when reviewing PRs, analyzing code changes, or when user requests PR review. ALWAYS approve or request changes after review.
 ---
 
 # GitHub PR Review with Suggested Changes
@@ -10,11 +10,29 @@ description: Provides comprehensive GitHub PR review with inline suggested chang
 This skill enables comprehensive GitHub pull request reviews with **actionable suggested changes** that developers can apply directly through GitHub's web UI using the "Commit suggestion" button.
 
 **Key Features:**
-- Code review against TheOne Studio standards
+- Code review with comprehensive checklists (security, quality, performance)
 - Inline suggested changes using ````suggestion` blocks
+- **Approval decision logic** (APPROVE / REQUEST_CHANGES / COMMENT)
 - GitHub API integration for programmatic review comments
 - Batch suggestion support for efficient fixes
-- Complete file replacements when needed
+- Integration with tech-specific skills (Unity, React Native, etc.)
+
+## ⚠️ CRITICAL: Always Approve or Request Changes
+
+**After every PR review, you MUST submit a review decision:**
+
+```bash
+# Approve (no critical/high issues)
+gh pr review $PR --repo $REPO --approve --body "..."
+
+# Request changes (critical/high issues found)
+gh pr review $PR --repo $REPO --request-changes --body "..."
+
+# Comment only (medium issues, can merge)
+gh pr review $PR --repo $REPO --comment --body "..."
+```
+
+**See:** [Approval Criteria](references/approval-criteria.md) for decision tree.
 
 ## When This Skill Triggers
 
@@ -298,14 +316,33 @@ I've added 6 inline suggestions. Go to Files Changed tab and click 'Commit sugge
 
 **Works best with:**
 - `theone-unity-standards` - For Unity C# code reviews
-- `code-reviewer` - For general code quality analysis
+- `theone-react-native-standards` - For React Native reviews
+- `theone-cocos-standards` - For Cocos reviews
+- `code-review` - For internal review practices (receiving feedback)
 - `docs-seeker` - For finding latest library documentation
 
 **Example workflow:**
 1. User provides PR URL
-2. Trigger `theone-unity-standards` to analyze code
-3. Use `github-pr-review` to create suggested changes
-4. Developer applies suggestions via GitHub UI
+2. Apply general checklists ([Review Checklists](references/review-checklists.md))
+3. Trigger tech-specific skill (e.g., `theone-unity-standards`) for detailed analysis
+4. Create inline suggestions using `github-pr-review`
+5. Submit review decision (APPROVE/REQUEST_CHANGES) per [Approval Criteria](references/approval-criteria.md)
+6. Developer applies suggestions via GitHub UI
+
+## Review Process
+
+### Step 0: Apply Review Checklists
+
+Before diving into code, run through technology-agnostic checklists:
+
+**See:** [Review Checklists](references/review-checklists.md)
+
+1. 🔒 Security checklist (secrets, injection, auth)
+2. ✅ Correctness checklist (logic, state, API)
+3. 🧪 Testing checklist (coverage, quality)
+4. 🧹 Quality checklist (structure, DRY)
+5. ⚡ Performance checklist (queries, memory)
+6. 📚 Documentation checklist
 
 ## Troubleshooting
 
@@ -339,15 +376,26 @@ gh pr diff <PR> --repo <REPO> | less
 
 This skill automates comprehensive GitHub PR reviews with actionable suggestions:
 
-1. ✅ Fetches PR details and diff
-2. ✅ Analyzes code against standards
-3. ✅ Creates inline suggestions with ````suggestion` blocks
-4. ✅ Uses GitHub API for programmatic comments
-5. ✅ Enables one-click fixes via GitHub UI
+1. ✅ Applies technology-agnostic review checklists
+2. ✅ Fetches PR details and diff
+3. ✅ Analyzes code against standards (general + tech-specific)
+4. ✅ Creates inline suggestions with ````suggestion` blocks
+5. ✅ Uses GitHub API for programmatic comments
+6. ✅ **Submits review decision (APPROVE/REQUEST_CHANGES)**
+7. ✅ Enables one-click fixes via GitHub UI
 
-**Result:** Faster, more efficient PR reviews with instant applicability.
+**Result:** Faster, more efficient PR reviews with instant applicability AND clear approval status.
 
-## References
+## Skill References
+
+| Reference | Purpose |
+|-----------|---------|
+| [Approval Criteria](references/approval-criteria.md) | Decision tree for APPROVE/REQUEST_CHANGES |
+| [Review Checklists](references/review-checklists.md) | Technology-agnostic security, quality, performance checklists |
+| [API Reference](references/api-reference.md) | GitHub API commands and examples |
+| [Workflow Examples](references/workflow-examples.md) | Complete review workflow examples |
+
+## External References
 
 - [GitHub Suggested Changes](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/commenting-on-a-pull-request)
 - [GitHub API - PR Review Comments](https://docs.github.com/en/rest/pulls/comments)
