@@ -11,9 +11,27 @@ Activate `planning` skill.
 $ARGUMENTS
 </task>
 
+## Pre-Creation Check
+
+Before creating plan folder:
+
+1. **Check for active plan:**
+   - If `<WORKING-DIR>/.claude/active-plan` exists AND points to valid directory:
+     - Ask user: "Active plan found: {path}. Continue with this? [Y/n]"
+     - If Y (default): Use existing path, skip folder creation
+     - If n: Proceed to create new plan
+   - If not exists or invalid: Proceed to create new
+
+2. **Create plan folder** (only if creating new):
+   - Generate: `plans/YYYYMMDD-HHmm-plan-name`
+   - Write path to `<WORKING-DIR>/.claude/active-plan`
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
 ## Workflow
 Use `planner` subagent to:
-1. Create a directory named `plans/YYYYMMDD-HHmm-plan-name` (eg. `plans/20251101-1505-authentication-and-profile-implementation`).
+1. If creating new plan: Create directory `plans/YYYYMMDD-HHmm-plan-name` and update `<WORKING-DIR>/.claude/active-plan`.
+   If reusing existing: Use the active plan path.
    Make sure you pass the directory path to every subagent during the process.
 2. Follow strictly to the "Plan Creation & Organization" rules of `planning` skill.
 3. Analyze the codebase by reading `codebase-summary.md`, `code-standards.md`, `system-architecture.md` and `project-overview-pdr.md` file.
@@ -39,7 +57,7 @@ plans/
 - For each phase, create `plans/YYYYMMDD-HHmm-plan-name/phase-XX-phase-name-here.md` containing the following sections in order: Context links (reference parent plan, dependencies, docs), Overview (date, description, priority, implementation status, review status), Key Insights, Requirements, Architecture, Related code files, Implementation Steps, Todo list, Success Criteria, Risk Assessment, Security Considerations, Next steps.
 
 ## Important Notes
-- **IMPORTANT:** Ensure token efficiency while maintaining high quality.
+- **IMPORTANT:** Ensure token consumption efficiency while maintaining high quality.
 - **IMPORTANT:** Analyze the skills catalog and activate the skills that are needed for the task during the process.
 - **IMPORTANT:** Sacrifice grammar for the sake of concision when writing reports.
 - **IMPORTANT:** In reports, list any unresolved questions at the end, if any.

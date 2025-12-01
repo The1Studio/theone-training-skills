@@ -3,7 +3,7 @@ description: ⚡ Start coding & testing an existing plan
 argument-hint: [plan]
 ---
 
-Think harder to start working on the following plan follow the Orchestration Protocol, Core Responsibilities, Subagents Team and Development Rules: 
+**MUST READ** `CLAUDE.md` then **THINK HARDER** to start working on the following plan follow the Orchestration Protocol, Core Responsibilities, Subagents Team and Development Rules:
 <plan>$ARGUMENTS</plan>
 
 ---
@@ -16,78 +16,161 @@ Think harder to start working on the following plan follow the Orchestration Pro
 **IMPORTANT:** Remind these rules with subagents communication:
 - Sacrifice grammar for the sake of concision when writing reports.
 - In reports, list any unresolved questions at the end, if any.
+- Ensure token efficiency while maintaining high quality.
 
 ---
 
-## Your Approach
+## Step 0: Plan Detection & Phase Selection
 
-1. **Absorb the Plan**: Read every step of the plan, map dependencies, and list ambiguities.
-2. **Execution Strategy**: Only read the general plan (`plan.md`) and start implementing phases one by one, continue from where you left off. Do not read all phases at once.
-3. **Implement Relentlessly**: Code, validate, and test each milestone in sequence, handling errors proactively and keeping the workflow unblocked until one phase is completed.
-4. **Regular Progress Updates**: Regularly update the progress and status of the plan and phases to keep stakeholders informed, before moving to the next phase.
-5. **Course-Correct**: Reassess risks, propose adjustments, and keep stakeholders informed until the implementation is complete.
+**If `$ARGUMENTS` is empty:**
+1. Find latest `plan.md` in `./plans` | `find ./plans -name "plan.md" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-`
+2. Parse plan for phases and status, auto-select next incomplete (prefer IN_PROGRESS or earliest Planned)
+
+**If `$ARGUMENTS` provided:** Use that plan and detect which phase to work on (auto-detect or use argument like "phase-2").
+
+**Output:** `✓ Step 0: [Plan Name] - [Phase Name]`
+
+**Subagent Pattern (use throughout):**
+```
+Task(subagent_type="[type]", prompt="[task description]", description="[brief]")
+```
 
 ---
 
-## Workflow:
+## Workflow Sequence
 
-### Analysis
+**Rules:** Follow steps 1-6 in order. Each step requires output marker starting with "✓ Step N:". Mark each complete in TodoWrite before proceeding. Do not skip steps.
 
-* Read every step of the plan, map dependencies, and list ambiguities.
-**IMPORTANT:** Analyze the skills catalog and activate the skills that are needed for the task during the process.
+---
 
-### Implementation
+## Step 1: Analysis & Task Extraction
 
-* Use `general agent (main agent)` to implement the plan step by step, follow the implementation plan in `./plans` directory.
-* Use `project-manager` to regularly update the progress and status of the plan and phases to keep stakeholders informed.
-* Use `ui-ux-designer` subagent to implement the frontend part follow the design guidelines at `./docs/design-guidelines.md` file.
-  * Use `ai-multimodal` skill to generate image assets.
-  * Use `ai-multimodal` skill to analyze and verify generated assets.
-  * Use `imagemagick` skill for image editing (crop, resize, remove background) if needed.
-* When you finish, run type checking and compile the code command to make sure there are no syntax errors.
+Read plan file completely. Map dependencies between tasks. List ambiguities or blockers. Identify required skills/tools and activate from catalog. Parse phase file and extract actionable tasks.
 
-### Testing
+**TodoWrite Initialization & Task Extraction:**
+- Initialize TodoWrite with `Step 0: [Plan Name] - [Phase Name]` and all command steps (Step 1 through Step 6)
+- Read phase file (e.g., phase-01-preparation.md)
+- Look for tasks/steps/phases/sections/numbered/bulleted lists
+- MUST convert to TodoWrite tasks:
+  - Phase Implementation tasks → Step 2.X (Step 2.1, Step 2.2, etc.)
+  - Phase Testing tasks → Step 3.X (Step 3.1, Step 3.2, etc.)
+  - Phase Code Review tasks → Step 4.X (Step 4.1, Step 4.2, etc.)
+- Ensure each task has UNIQUE name (increment X for each task)
+- Add tasks to TodoWrite after their corresponding command step
 
-* Write the tests for the plan, **make sure you don't use fake data, mocks, cheats, tricks, temporary solutions, just to pass the build or github actions**, tests should be real and cover all possible cases.
-* Use `tester` subagent to run the tests, make sure it works, then report back to main agent.
-* If there are issues or failed tests, use `debugger` subagent to find the root cause of the issues, then ask main agent to fix all of them and 
-* Repeat the process until all tests pass or no more issues are reported. Again, do not ignore failed tests or use fake data just to pass the build or github actions.
-* Use `project-manager` to regularly update the progress and status of the plan and phases to keep stakeholders informed.
+**Output:** `✓ Step 1: Found [N] tasks across [M] phases - Ambiguities: [list or "none"]`
 
-### Code Review
+Mark Step 1 complete in TodoWrite, mark Step 2 in_progress.
 
-* After finishing, delegate to `code-reviewer` subagent to review code. If there are critical issues, ask main agent to improve the code and tell `tester` agent to run the tests again. 
-* Repeat the "Testing" process until all tests pass.
-* When all tests pass, code is reviewed, the tasks are completed, continue to the next step.
-* Use `project-manager` to regularly update the progress and status of the plan and phases to keep stakeholders informed.
-* **IMPORTANT:** Sacrifice grammar for the sake of concision when writing outputs.
+---
 
-### Project Management & Documentation
+## Step 2: Implementation
 
-**If user approves the changes:**
-* Use `project-manager` and `docs-manager` subagents in parallel to update the project progress and documentation:
-  * Use `project-manager` subagent to update the project progress and task status in the given plan file.
-  * Use `docs-manager` subagent to update the docs in `./docs` directory if needed.
-  * Use `project-manager` subagent to create a project roadmap at `./docs/project-roadmap.md` file.
-* **IMPORTANT:** Sacrifice grammar for the sake of concision when writing outputs.
+Implement selected plan phase step-by-step following extracted tasks (Step 2.1, Step 2.2, etc.). Mark tasks complete as done. For UI work, call `ui-ux-designer` subagent: "Implement [feature] UI per ./docs/design-guidelines.md". Use `ai-multimodal` skill for image assets, `imagemagick` for editing. Run type checking and compile to verify no syntax errors.
 
-**If user rejects the changes:**
-* Ask user to explain the issues and ask main agent to fix all of them and repeat the process.
-* Use `project-manager` to regularly update the progress and status of the plan and phases to keep stakeholders informed.
+**Output:** `✓ Step 2: Implemented [N] files - [X/Y] tasks complete, compilation passed`
 
-### Onboarding
+Mark Step 2 complete in TodoWrite, mark Step 3 in_progress.
 
-* Instruct the user to get started with the feature if needed (for example: grab the API key, set up the environment variables, etc).
-* Help the user to configure (if needed) step by step, ask 1 question at a time, wait for the user to answer and take the answer to set up before moving to the next question.
-* If user requests to change the configuration, repeat the previous step until the user approves the configuration.
+---
 
-### Final Report
-* Report back to user with a summary of the changes and explain everything briefly, guide user to get started and suggest the next steps.
-* Ask the user if they want to commit and push to git repository, if yes, use `git-manager` subagent to commit and push to git repository.
-* Use `project-manager` to regularly update the progress and status of the plan and phases to keep stakeholders informed.
-- **IMPORTANT:** In reports, list any unresolved questions at the end, if any.
+## Step 3: Testing
 
-**REMEMBER**:
+Write tests covering happy path, edge cases, and error cases. Call `tester` subagent: "Run test suite for plan phase [phase-name]". If ANY tests fail: STOP, call `debugger` subagent: "Analyze failures: [details]", fix all issues, re-run `tester`. Repeat until 100% pass.
+
+**Testing standards:** Unit tests may use mocks for external dependencies (APIs, DB). Integration tests use test environment. E2E tests use real but isolated data. Forbidden: commenting out tests, changing assertions to pass, TODO/FIXME to defer fixes.
+
+**Output:** `✓ Step 3: Tests [X/X passed] - All requirements met`
+
+**Validation:** If X ≠ total, Step 3 INCOMPLETE - do not proceed.
+
+Mark Step 3 complete in TodoWrite, mark Step 4 in_progress.
+
+---
+
+## Step 4: Code Review
+
+Call `code-reviewer` subagent: "Review changes for plan phase [phase-name]. Check security, performance, architecture, YAGNI/KISS/DRY". If critical issues found: STOP, fix all, re-run `tester` to verify, re-run `code-reviewer`. Repeat until no critical issues.
+
+**Critical issues:** Security vulnerabilities (XSS, SQL injection, OWASP), performance bottlenecks, architectural violations, principle violations.
+
+**Output:** `✓ Step 4: Code reviewed - [0] critical issues`
+
+**Validation:** If critical issues > 0, Step 4 INCOMPLETE - do not proceed.
+
+Mark Step 4 complete in TodoWrite, mark Step 5 in_progress.
+
+---
+
+## Step 5: User Approval ⏸ BLOCKING GATE
+
+Present summary (3-5 bullets): what implemented, tests [X/X passed], code review outcome.
+
+**Ask user explicitly:** "Phase implementation complete. All tests pass, code reviewed. Approve changes?"
+
+**Stop and wait** - do not output Step 6 content until user responds.
+
+**Output (while waiting):** `⏸ Step 5: WAITING for user approval`
+
+**Output (after approval):** `✓ Step 5: User approved - Ready to complete`
+
+Mark Step 5 complete in TodoWrite, mark Step 6 in_progress.
+
+---
+
+## Step 6: Finalize
+
+**Prerequisites:** User approved in Step 5 (verified above).
+
+1. **STATUS UPDATE - BOTH MANDATORY - PARALLEL EXECUTION:**
+- **Call** `project-manager` sub-agent: "Update plan status in [plan-path]. Mark plan phase [phase-name] as DONE with timestamp. Update roadmap."
+- **Call** `docs-manager` sub-agent: "Update docs for plan phase [phase-name]. Changed files: [list]."
+
+2. **ONBOARDING CHECK:** Detect onboarding requirements (API keys, env vars, config) + generate summary report with next steps.
+
+3. **AUTO-COMMIT (after steps 1 and 2 completes):**
+- Run only if: Steps 1 and 2 successful + User approved + Tests passed
+- Auto-stage, commit with message [phase - plan] and push
+
+**Validation:** Steps 1 and 2 must complete successfully. Step 3 (auto-commit) runs only if conditions met.
+
+Mark Step 6 complete in TodoWrite.
+
+**Phase workflow finished. Ready for next plan phase.**
+
+---
+
+## Critical Enforcement Rules
+
+**Step outputs must follow unified format:** `✓ Step [N]: [Brief status] - [Key metrics]`
+
+**Examples:**
+- Step 0: `✓ Step 0: [Plan Name] - [Phase Name]`
+- Step 1: `✓ Step 1: Found [N] tasks across [M] phases - Ambiguities: [list]`
+- Step 2: `✓ Step 2: Implemented [N] files - [X/Y] tasks complete`
+- Step 3: `✓ Step 3: Tests [X/X passed] - All requirements met`
+- Step 4: `✓ Step 4: Code reviewed - [0] critical issues`
+- Step 5: `✓ Step 5: User approved - Ready to complete`
+- Step 6: `✓ Step 6: Finalize - Status updated - Git committed`
+
+**If any "✓ Step N:" output missing, that step is INCOMPLETE.**
+
+**TodoWrite tracking required:** Initialize at Step 0, mark each step complete before next.
+
+**Mandatory subagent calls:**
+- Step 3: `tester`
+- Step 4: `code-reviewer`
+- Step 6: `project-manager` AND `docs-manager` (when user approves)
+
+**Blocking gates:**
+- Step 3: Tests must be 100% passing
+- Step 4: Critical issues must be 0
+- Step 5: User must explicitly approve
+- Step 6: Both `project-manager` and `docs-manager` must complete successfully
+
+**REMEMBER:**
+- Do not skip steps. Do not proceed if validation fails. Do not assume approval without user response.
+- One plan phase per command run. Command focuses on single plan phase only.
 - You can always generate images with `ai-multimodal` skill on the fly for visual assets.
 - You always read and analyze the generated assets with `ai-multimodal` skill to verify they meet requirements.
-- For image editing (removing background, adjusting, cropping), use ImageMagick or similar tools as needed.
+- For image editing (removing background, adjusting, cropping), use `ImageMagick` or similar tools as needed.

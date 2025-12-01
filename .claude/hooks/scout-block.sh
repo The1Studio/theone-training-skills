@@ -1,6 +1,6 @@
 #!/bin/bash
 # scout-block.sh - Bash implementation for blocking heavy directories
-# Blocks: node_modules, __pycache__, .git/, dist/, build/
+# Reads patterns from .ckignore file (defaults: node_modules, __pycache__, .git, dist, build)
 #
 # Blocking Rules:
 # - File paths: Blocks any file_path/path/pattern containing blocked directories
@@ -17,26 +17,60 @@ if [ -z "$INPUT" ]; then
   exit 2
 fi
 
+# Determine script directory for .ckignore lookup
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Look for .ckignore in .claude/ folder (1 level up from .claude/hooks/)
+CLAUDE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CKIGNORE_FILE="$CLAUDE_DIR/.ckignore"
+
 # Parse JSON and extract all relevant parameters using Node.js
-CHECK_RESULT=$(echo "$INPUT" | node -e "
+CHECK_RESULT=$(echo "$INPUT" | CKIGNORE_FILE="$CKIGNORE_FILE" node -e "
+const fs = require('fs');
+const path = require('path');
+
 try {
-  const input = require('fs').readFileSync(0, 'utf-8');
+  const input = fs.readFileSync(0, 'utf-8');
   const data = JSON.parse(input);
 
   if (!data.tool_input || typeof data.tool_input !== 'object') {
-    console.error('ERROR: Invalid JSON structure');
-    process.exit(2);
+    // If JSON structure is invalid, allow operation with warning
+    console.error('WARN: Invalid JSON structure, allowing operation');
+    console.log('ALLOWED');
+    process.exit(0);
   }
 
   const toolInput = data.tool_input;
 
+  // Read patterns from .ckignore file
+  const ckignorePath = process.env.CKIGNORE_FILE;
+  let blockedPatterns = ['node_modules', '__pycache__', '.git', 'dist', 'build']; // defaults
+
+  if (ckignorePath && fs.existsSync(ckignorePath)) {
+    const content = fs.readFileSync(ckignorePath, 'utf-8');
+    const patterns = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+    if (patterns.length > 0) {
+      blockedPatterns = patterns;
+    }
+  }
+
+  // Escape special regex characters and build dynamic patterns
+  const escapeRegex = (str) => str.replace(/[.*+?^\${}()|[\]\\\\]/g, '\\\\$&');
+  const escapedPatterns = blockedPatterns.map(escapeRegex);
+  const patternGroup = escapedPatterns.join('|');
+
   // Pattern for directory paths (used for file_path, path, pattern)
-  const blockedDirPattern = /(^|\/|\s)node_modules(\/|$|\s)|(^|\/|\s)__pycache__(\/|$|\s)|(^|\/|\s)\.git(\/|$|\s)|(^|\/|\s)dist(\/|$|\s)|(^|\/|\s)build(\/|$|\s)/;
+  const blockedDirPattern = new RegExp('(^|/|\\\\s)(' + patternGroup + ')(/|\$|\\\\s)');
 
   // Pattern for Bash commands - only block directory access, not build commands
   // Blocks: cd node_modules, ls build/, cat dist/file.js
   // Allows: npm build, pnpm build, yarn build, npm run build
-  const blockedBashPattern = /(cd\s+|ls\s+|cat\s+|rm\s+|cp\s+|mv\s+|find\s+)(node_modules|__pycache__|\.git|dist|build)(\/|$|\s)|(\s|^|\/)node_modules\/|(\s|^|\/)__pycache__\/|(\s|^|\/)\.git\/|(\s|^|\/)dist\/|(\s|^|\/)build\//;
+  const blockedBashPattern = new RegExp(
+    '(cd\\\\s+|ls\\\\s+|cat\\\\s+|rm\\\\s+|cp\\\\s+|mv\\\\s+|find\\\\s+)(' + patternGroup + ')(/|\$|\\\\s)|' +
+    '(\\\\s|^|/)(' + patternGroup + ')/'
+  );
 
   // Check file path parameters (strict blocking)
   const fileParams = [
@@ -62,8 +96,11 @@ try {
 
   console.log('ALLOWED');
 } catch (error) {
-  console.error('ERROR: JSON parse failed');
-  process.exit(2);
+  // If JSON parsing fails, allow operation with warning (fail-open approach)
+  // This prevents hook configuration issues from blocking all operations
+  console.error('WARN: JSON parse failed, allowing operation -', error.message);
+  console.log('ALLOWED');
+  process.exit(0);
 }
 ")
 

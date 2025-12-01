@@ -1,5 +1,5 @@
 # scout-block.ps1 - PowerShell implementation for blocking heavy directories
-# Blocks: node_modules, __pycache__, .git/, dist/, build/
+# Reads patterns from .ckignore file (defaults: node_modules, __pycache__, .git, dist, build)
 #
 # Blocking Rules:
 # - File paths: Blocks any file_path/path/pattern containing blocked directories
@@ -33,13 +33,36 @@ if (-not $hookData.tool_input) {
 # Extract tool input
 $toolInput = $hookData.tool_input
 
+# Determine script directory and .claude folder for .ckignore lookup
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$claudeDir = Split-Path -Parent $scriptDir
+$ckignoreFile = Join-Path $claudeDir ".ckignore"
+
+# Default blocked patterns
+$blockedPatterns = @('node_modules', '__pycache__', '\.git', 'dist', 'build')
+
+# Read patterns from .ckignore if it exists
+if (Test-Path $ckignoreFile) {
+    $patterns = Get-Content $ckignoreFile |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and -not $_.StartsWith('#') }
+    if ($patterns.Count -gt 0) {
+        # Escape special regex characters
+        $blockedPatterns = $patterns | ForEach-Object { [regex]::Escape($_) }
+    }
+}
+
+# Build dynamic pattern group
+$patternGroup = $blockedPatterns -join '|'
+
 # Pattern for directory paths (used for file_path, path, pattern)
-$blockedDirPattern = '(^|/|\s)node_modules(/|$|\s)|(^|/|\s)__pycache__(/|$|\s)|(^|/|\s)\.git(/|$|\s)|(^|/|\s)dist(/|$|\s)|(^|/|\s)build(/|$|\s)'
+# Handles both forward slashes (/) and backslashes (\) for cross-platform support
+$blockedDirPattern = "(^|[/\\]|\s)($patternGroup)([/\\]|`$|\s)"
 
 # Pattern for Bash commands - only block directory access, not build commands
 # Blocks: cd node_modules, ls build/, cat dist/file.js
 # Allows: npm build, pnpm build, yarn build, npm run build
-$blockedBashPattern = '(cd\s+|ls\s+|cat\s+|rm\s+|cp\s+|mv\s+|find\s+)(node_modules|__pycache__|\.git|dist|build)(/|$|\s)|(\s|^|/)node_modules/|(\s|^|/)__pycache__/|(\s|^|/)\.git/|(\s|^|/)dist/|(\s|^|/)build/'
+$blockedBashPattern = "(cd\s+|ls\s+|cat\s+|rm\s+|cp\s+|mv\s+|find\s+)($patternGroup)([/\\]|`$|\s)|(\s|^|[/\\])($patternGroup)[/\\]"
 
 # Check file path parameters (strict blocking)
 $fileParams = @(
@@ -50,7 +73,8 @@ $fileParams = @(
 
 foreach ($param in $fileParams) {
     if ($param -and ($param -is [string]) -and ($param -match $blockedDirPattern)) {
-        Write-Error "ERROR: Blocked directory pattern (node_modules, __pycache__, .git/, dist/, build/)"
+        $patternList = ($blockedPatterns -replace '\\', '') -join ', '
+        Write-Error "ERROR: Blocked directory pattern ($patternList)"
         exit 2
     }
 }
@@ -58,7 +82,8 @@ foreach ($param in $fileParams) {
 # Check Bash command (selective blocking - only directory access)
 if ($toolInput.command -and ($toolInput.command -is [string])) {
     if ($toolInput.command -match $blockedBashPattern) {
-        Write-Error "ERROR: Blocked directory pattern (node_modules, __pycache__, .git/, dist/, build/)"
+        $patternList = ($blockedPatterns -replace '\\', '') -join ', '
+        Write-Error "ERROR: Blocked directory pattern ($patternList)"
         exit 2
     }
 }

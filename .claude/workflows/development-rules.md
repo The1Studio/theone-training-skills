@@ -21,7 +21,7 @@
 
 ## Code Quality Guidelines
 - Read and follow codebase structure and code standards in `./docs`
-- Don't be too harsh on code linting, but make sure there are no syntax errors and code are compilable
+- Don't be too harsh on code linting, but **make sure there are no syntax errors and code are compilable**
 - Prioritize functionality and readability over strict style enforcement and code formatting
 - Use reasonable code quality standards that enhance developer productivity
 - Use try catch error handling & cover security standards

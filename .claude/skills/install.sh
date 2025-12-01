@@ -4,6 +4,21 @@
 
 set -e
 
+# Parse command line arguments
+SKIP_CONFIRM=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -y|--yes) SKIP_CONFIRM=true ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+# Check for NON_INTERACTIVE environment variable
+if [[ -n "${NON_INTERACTIVE}" ]]; then
+    SKIP_CONFIRM=true
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -146,16 +161,24 @@ install_node_deps() {
     # Install global npm packages
     print_info "Installing global npm packages..."
 
-    declare -a npm_packages=(
-        "rmbg-cli"
-        "pnpm"
-        "wrangler"
-        "repomix"
+    # Package name to CLI command mapping (some packages have different CLI names)
+    declare -A npm_packages=(
+        ["rmbg-cli"]="rmbg"
+        ["pnpm"]="pnpm"
+        ["wrangler"]="wrangler"
+        ["repomix"]="repomix"
     )
 
-    for package in "${npm_packages[@]}"; do
-        if npm list -g "$package" >/dev/null 2>&1; then
-            print_success "$package already installed"
+    for package in "${!npm_packages[@]}"; do
+        cmd="${npm_packages[$package]}"
+
+        # Check CLI command first (handles standalone installs like brew, curl, etc.)
+        if command_exists "$cmd"; then
+            version=$("$cmd" --version 2>&1 | head -n1 || echo "available")
+            print_success "$package already installed ($version)"
+        # Fallback: check if installed via npm registry
+        elif npm list -g "$package" >/dev/null 2>&1; then
+            print_success "$package already installed via npm"
         else
             print_info "Installing $package..."
             npm install -g "$package" 2>/dev/null || {
@@ -190,17 +213,21 @@ install_node_deps() {
         print_success "mcp-management dependencies installed"
     fi
 
-    # Optional: Shopify CLI (ask user)
+    # Optional: Shopify CLI (ask user unless auto-confirming)
     if [ -d "$SCRIPT_DIR/shopify" ]; then
-        read -p "Install Shopify CLI for Shopify skill? (y/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_info "Installing Shopify CLI..."
-            npm install -g @shopify/cli @shopify/theme 2>/dev/null || {
-                print_warning "Failed to install Shopify CLI globally. Trying with sudo..."
-                sudo npm install -g @shopify/cli @shopify/theme
-            }
-            print_success "Shopify CLI installed"
+        if [[ "$SKIP_CONFIRM" == "true" ]]; then
+            print_info "Skipping Shopify CLI installation (optional, use --yes to install all)"
+        else
+            read -p "Install Shopify CLI for Shopify skill? (y/N) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_info "Installing Shopify CLI..."
+                npm install -g @shopify/cli @shopify/theme 2>/dev/null || {
+                    print_warning "Failed to install Shopify CLI globally. Trying with sudo..."
+                    sudo npm install -g @shopify/cli @shopify/theme
+                }
+                print_success "Shopify CLI installed"
+            fi
         fi
     fi
 }
@@ -362,12 +389,16 @@ main() {
         exit 1
     fi
 
-    # Confirm installation
-    read -p "This will install system packages and Node.js dependencies. Continue? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_warning "Installation cancelled"
-        exit 0
+    # Confirm installation (skip if --yes flag or NON_INTERACTIVE env is set)
+    if [[ "$SKIP_CONFIRM" == "false" ]]; then
+        read -p "This will install system packages and Node.js dependencies. Continue? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_warning "Installation cancelled"
+            exit 0
+        fi
+    else
+        print_info "Auto-confirming installation (--yes flag or NON_INTERACTIVE mode)"
     fi
 
     check_package_manager

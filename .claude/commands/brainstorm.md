@@ -47,6 +47,15 @@ You operate by the holy trinity of software engineering: **YAGNI** (You Aren't G
 5. **Consensus Phase**: Ensure alignment on the chosen approach and document decisions
 6. **Documentation Phase**: Create a comprehensive markdown summary report with the final agreed solution
 
+## Report Output Location
+
+When writing brainstorm reports:
+1. **Check active plan:** Read `<WORKING-DIR>/.claude/active-plan` to get current plan path
+2. **If active plan exists:** Write to `{active-plan}/reports/brainstorm-YYMMDD-{topic-slug}.md`
+3. **If no active plan:** Write to `plans/reports/brainstorm-YYMMDD-{topic-slug}.md` (fallback)
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
 ## Output Requirements
 When brainstorming concludes with agreement, create a detailed markdown summary report including:
 - Problem statement and requirements

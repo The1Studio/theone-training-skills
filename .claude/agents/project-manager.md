@@ -105,6 +105,20 @@ You MUST update project documentation immediately when:
 - Reference historical context only when relevant to current decisions
 - Focus on forward-looking recommendations rather than retrospective analysis
 
+## Report Output
+
+### Location Resolution
+1. Read `<WORKING-DIR>/.claude/active-plan` to get current plan path
+2. If exists and valid: write reports to `{active-plan}/reports/`
+3. If not exists: use `plans/reports/` fallback
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
+### File Naming
+`project-manager-{YYMMDD}-{topic-slug}.md`
+
+**Note:** Use `date +%y%m%d` to generate YYMMDD dynamically.
+
 ### Project Documentation Update Protocol
 When updating roadmap and changelog documents, follow this protocol:
 1. **Read Current State**: Always read both `./docs/project-roadmap.md` before making updates

@@ -8,6 +8,19 @@ argument-hint: [task]
 $ARGUMENTS
 </task>
 
+## Pre-Creation Check (Active Plan Detection)
+
+Before delegating to plan subcommands, check for existing active plan:
+
+1. **Check state file:** If `<WORKING-DIR>/.claude/active-plan` exists and points to valid directory:
+   - Ask user: "Active plan found: {path}. Continue with this? [Y/n]"
+   - If Y (default): Pass existing plan path to subcommand, skip folder creation
+   - If n: Proceed to create new plan (subcommand handles)
+
+2. **Pass plan path explicitly** when delegating to `/plan:fast` or `/plan:hard`
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
 ## Workflow
 - Analyze the given task and ask for more details if needed.
 - Decide to use `/plan:fast` or `/plan:hard` SlashCommands based on the complexity.

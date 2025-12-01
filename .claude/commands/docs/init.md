@@ -2,8 +2,18 @@
 description: ⚡⚡⚡⚡ Analyze the codebase and create initial documentation
 ---
 
-## Mission
-Use `docs-manager` agent to analyze the codebase and create initial documentation:
+## Phase 1: Parallel Codebase Scouting
+
+**You (main agent) must spawn scouts** - subagents cannot spawn subagents.
+
+1. Run `ls -la` to identify actual project directories
+2. Spawn 2-4 `scout-external` (preferred, uses Gemini 2M context) or `scout` (fallback) via Task tool
+3. Target directories **that actually exist** - adapt to project structure, don't hardcode paths
+4. Merge scout results into context summary
+
+## Phase 2: Documentation Creation (docs-manager Agent)
+
+Pass the gathered file list to `docs-manager` agent to create initial documentation:
 - `docs/project-overview-pdr.md`: Project overview and PDR (Product Development Requirements)
 - `docs/codebase-summary.md`: Codebase summary
 - `docs/code-standards.md`: Codebase structure and code standards

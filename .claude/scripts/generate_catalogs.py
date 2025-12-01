@@ -1,16 +1,38 @@
 #!/usr/bin/env python3
-"""Generate updated command and skill catalogs."""
+"""Generate updated command and skill catalogs.
 
+Outputs YAML to stdout by default for easy consumption by Claude.
+Use --output to write to a specific file instead.
+"""
+
+import argparse
+import sys
 import yaml
 from pathlib import Path
 from datetime import datetime
 
-def load_yaml(path):
-    return yaml.safe_load(Path(path).read_text())
+# Script directory for resolving relative paths
+SCRIPT_DIR = Path(__file__).parent
+
+# Ensure UTF-8 output on Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
+def load_yaml(filename):
+    """Load YAML file from script directory with helpful error handling."""
+    path = SCRIPT_DIR / filename
+    if not path.exists():
+        print(f"Error: {path} not found", file=sys.stderr)
+        print(f"Hint: Run scan_skills.py or scan_commands.py first to generate data files", file=sys.stderr)
+        sys.exit(1)
+    return yaml.safe_load(path.read_text(encoding='utf-8'))
+
 
 def generate_commands_yaml():
     """Generate COMMANDS.yaml catalog."""
-    commands = load_yaml('.claude/scripts/commands_data.yaml')
+    commands = load_yaml('commands_data.yaml')
 
     # Group by category
     categories = {}
@@ -52,9 +74,10 @@ def generate_commands_yaml():
 
     return yaml.dump(catalog, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
+
 def generate_skills_yaml():
     """Generate SKILLS.yaml catalog."""
-    skills = load_yaml('.claude/scripts/skills_data.yaml')
+    skills = load_yaml('skills_data.yaml')
 
     # Group by category
     categories = {}
@@ -97,13 +120,44 @@ def generate_skills_yaml():
 
     return yaml.dump(catalog, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
-# Generate catalogs
-commands_yaml = generate_commands_yaml()
-skills_yaml = generate_skills_yaml()
 
-# Save
-Path('guide/COMMANDS.yaml').write_text(commands_yaml)
-Path('guide/SKILLS.yaml').write_text(skills_yaml)
+def write_output(content, output_path=None, label=None):
+    """Write content to stdout or file."""
+    if output_path:
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+        print(f"✓ Generated {output_path}", file=sys.stderr)
+    else:
+        print(content)
 
-print("✓ Generated guide/COMMANDS.yaml")
-print("✓ Generated guide/SKILLS.yaml")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Generate command and skill catalogs',
+        epilog='Outputs to stdout by default. Use --output to write to a file.'
+    )
+    parser.add_argument('--skills', action='store_true', help='Generate only skills catalog')
+    parser.add_argument('--commands', action='store_true', help='Generate only commands catalog')
+    parser.add_argument('--output', '-o', metavar='PATH', help='Write output to file instead of stdout')
+    args = parser.parse_args()
+
+    # Validate: --output requires exactly one of --skills or --commands
+    if args.output and not (args.skills ^ args.commands):
+        print("Error: --output requires exactly one of --skills or --commands", file=sys.stderr)
+        sys.exit(1)
+
+    # If no specific flag, generate both (to stdout only)
+    generate_both = not (args.skills or args.commands)
+
+    if args.commands or generate_both:
+        commands_yaml = generate_commands_yaml()
+        if generate_both:
+            print("# === COMMANDS CATALOG ===")
+        write_output(commands_yaml, args.output if args.commands else None)
+
+    if args.skills or generate_both:
+        skills_yaml = generate_skills_yaml()
+        if generate_both:
+            print("\n# === SKILLS CATALOG ===")
+        write_output(skills_yaml, args.output if args.skills else None)

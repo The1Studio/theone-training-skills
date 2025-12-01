@@ -2,27 +2,27 @@
   "includeCoAuthoredBy": false,
   "statusLine": {
     "type": "command",
-    "command": "node .claude/statusline.js",
+    "command": "node .claude/statusline.cjs",
     "padding": 0
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/dev-rules-reminder.cjs"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|Glob|Grep|Read|Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scout-block.js"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "📋 Development Rules Reminder:\n\n**Modularization Principles (ALWAYS follow these):**\n- Keep files under 200 lines for optimal context management\n- Use kebab-case naming with descriptive names (e.g., user-authentication-service.ts)\n- File names should be self-documenting for LLM tools (Grep, Glob)\n- Reuse existing modules/components instead of creating duplicates\n- Split large files into smaller, focused modules\n- Extract utility functions into separate modules\n- Use composition over inheritance\n\n**Before writing files:**\n1. Check if similar functionality exists in the codebase\n2. Consider file size - will this exceed 200 lines?\n3. If yes, automatically split into logical modules WITHOUT asking\n4. Follow YAGNI, KISS, DRY principles\n\n**Markdown file organization:**\n- Plans/reports/research → `./plans/`\n- Documentation → `./docs/`\n- Do NOT create markdown files randomly in other locations\n\n**IMPORTANT:** Make autonomous decisions about modularization. Don't ask for clarification - just split files intelligently when needed."
+            "command": "node .claude/hooks/scout-block.cjs"
           }
         ]
       }

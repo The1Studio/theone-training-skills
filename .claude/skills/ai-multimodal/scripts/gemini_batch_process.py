@@ -314,7 +314,13 @@ def generate_video_veo(
     reference_images: Optional[List[str]] = None,
     verbose: bool = False
 ) -> Dict[str, Any]:
-    """Generate video using Veo models."""
+    """Generate video using Veo models.
+
+    For image-to-video with first/last frames (Veo 3.1):
+    - First reference image becomes the opening frame (image parameter)
+    - Second reference image becomes the closing frame (last_frame config)
+    - Model interpolates between them to create smooth video
+    """
     try:
         # Build config with snake_case for Python SDK
         config_params = {
@@ -322,36 +328,54 @@ def generate_video_veo(
             'resolution': resolution
         }
 
+        # Prepare first frame and last frame images
+        first_frame = None
+        last_frame = None
+
+        if reference_images:
+            import mimetypes
+
+            def load_image(img_path_str: str) -> types.Image:
+                """Load image file as types.Image with bytes and mime type."""
+                img_path = Path(img_path_str)
+                image_bytes = img_path.read_bytes()
+                mime_type, _ = mimetypes.guess_type(str(img_path))
+                if not mime_type:
+                    mime_type = 'image/png'
+                return types.Image(
+                    image_bytes=image_bytes,
+                    mime_type=mime_type
+                )
+
+            # First image = opening frame
+            if len(reference_images) >= 1:
+                first_frame = load_image(reference_images[0])
+
+            # Second image = closing frame (last_frame in config)
+            if len(reference_images) >= 2:
+                last_frame = load_image(reference_images[1])
+                config_params['last_frame'] = last_frame
+
         gen_config = types.GenerateVideosConfig(**config_params)
 
         if verbose:
             print(f"  Generating video with Veo: {model}")
             print(f"  Config: {resolution}, {aspect_ratio}")
-            if reference_images:
-                print(f"  Reference images: {len(reference_images)}")
-
-        # Load reference images if provided
-        ref_images = None
-        if reference_images:
-            import PIL.Image
-            ref_images = []
-            for img_path in reference_images[:3]:  # Max 3
-                img = PIL.Image.open(img_path)
-                ref_images.append(types.VideoGenerationReferenceImage(
-                    image=img,
-                    reference_type='asset'
-                ))
-            gen_config.reference_images = ref_images
+            if first_frame:
+                print(f"  First frame: provided")
+            if last_frame:
+                print(f"  Last frame: provided (interpolation mode)")
 
         start = time.time()
 
         if verbose:
             print(f"  Starting video generation (this may take 11s-6min)...")
 
-        # Call generate_videos (plural) - returns an operation
+        # Call generate_videos with image parameter for first frame
         operation = client.models.generate_videos(
             model=model,
             prompt=prompt,
+            image=first_frame,  # First frame as opening image
             config=gen_config
         )
 

@@ -28,14 +28,38 @@ plans/
 │   ├── phase-04-implement-ui-components.md    # UI components
 │   ├── phase-05-implement-authentication.md   # Auth & authorization
 │   ├── phase-06-implement-profile.md          # Profile page
-│   ├── phase-07-write-tests.md                # Tests
-│   ├── phase-08-run-tests.md                  # Test execution
-│   ├── phase-09-code-review.md                # Code review
-│   ├── phase-10-project-management.md         # Project management
-│   ├── phase-11-onboarding.md                 # Onboarding
-│   └── phase-12-final-report.md               # Final report
+│   └── phase-07-write-tests.md                # Tests
 └── ...
 ```
+
+### Active Plan State Tracking
+
+**State File:** `<WORKING-DIR>/.claude/active-plan`
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
+- Contains path to current working plan (e.g., `plans/20251128-1654-feature-name`)
+- All agents read this file to determine report output location
+- Commands check this file before creating new plan folders
+
+**Pre-Creation Check:**
+```bash
+# Before creating any plan folder:
+if [ -f "<WORKING-DIR>/.claude/active-plan" ]; then
+  ACTIVE=$(cat <WORKING-DIR>/.claude/active-plan)
+  if [ -d "$ACTIVE" ]; then
+    # Ask user: "Continue with existing plan? [Y/n]"
+    # Y → reuse $ACTIVE
+    # n → create new, update active-plan
+  fi
+fi
+```
+
+**Report Output Rules:**
+1. Read `<WORKING-DIR>/.claude/active-plan` to get plan path
+2. Write reports to `{plan-path}/reports/`
+3. Use naming: `{agent}-{YYMMDD}-{slug}.md`
+4. Fallback: `plans/reports/` if no active-plan exists
 
 ## File Structure
 
@@ -43,7 +67,6 @@ plans/
 - Keep generic and under 80 lines
 - List each phase with status/progress
 - Link to detailed phase files
-- High-level timeline
 - Key dependencies
 
 ### Phase Files (phase-XX-name.md)
@@ -54,7 +77,7 @@ Each phase file should contain:
 - Links to related reports, files, documentation
 
 **Overview**
-- Date and priority
+- Priority
 - Current status
 - Brief description
 

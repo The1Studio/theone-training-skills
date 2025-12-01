@@ -33,12 +33,26 @@ Automatically blocks Claude Code from accessing heavy directories to improve per
 
 **Configuration:** Already enabled in `.claude/settings.json`
 
-**Blocked Patterns:**
-- `node_modules/` - NPM dependencies
-- `__pycache__/` - Python cache
-- `.git/` - Git internal files
-- `dist/` - Distribution builds
-- `build/` - Build artifacts
+**Default Blocked Patterns** (configured in `.claude/.ckignore`):
+- `node_modules` - NPM dependencies
+- `__pycache__` - Python cache
+- `.git` - Git internal files
+- `dist` - Distribution builds
+- `build` - Build artifacts
+
+**Customization:**
+Edit `.claude/.ckignore` to customize blocked patterns:
+```bash
+# Lines starting with # are comments
+# One pattern per line
+node_modules
+__pycache__
+.git
+dist
+build
+vendor
+.cache
+```
 
 **Testing:**
 ```bash
@@ -47,6 +61,9 @@ bash tests/test-scout-block.sh
 
 # Windows PowerShell
 pwsh tests/test-scout-block.ps1
+
+# Test .ckignore functionality
+node .claude/hooks/tests/test-ckignore.js
 ```
 
 **Requirements:**

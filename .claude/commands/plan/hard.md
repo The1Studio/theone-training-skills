@@ -11,8 +11,26 @@ Activate `planning` skill.
 $ARGUMENTS
 </task>
 
+## Pre-Creation Check
+
+Before creating plan folder:
+
+1. **Check for active plan:**
+   - If `<WORKING-DIR>/.claude/active-plan` exists AND points to valid directory:
+     - Ask user: "Active plan found: {path}. Continue with this? [Y/n]"
+     - If Y (default): Use existing path, skip folder creation
+     - If n: Proceed to create new plan
+   - If not exists or invalid: Proceed to create new
+
+2. **Create plan folder** (only if creating new):
+   - Generate: `plans/YYYYMMDD-HHmm-plan-name`
+   - Write path to `<WORKING-DIR>/.claude/active-plan`
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
 ## Workflow
-1. Create a directory named `plans/YYYYMMDD-HHmm-plan-name` (eg. `plans/20251101-1505-authentication-and-profile-implementation`).
+1. If creating new plan: Create directory `plans/YYYYMMDD-HHmm-plan-name` and update `<WORKING-DIR>/.claude/active-plan`.
+   If reusing existing: Use the active plan path.
    Make sure you pass the directory path to every subagent during the process.
 2. Follow strictly to the "Plan Creation & Organization" rules of `planning` skill.
 3. Use multiple `researcher` agents (max 2 agents) in parallel to research for this task: 

@@ -23,10 +23,51 @@ import sys
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
+def _parse_env_file_fallback(path) -> Dict[str, str]:
+    """
+    Pure-Python fallback .env parser when python-dotenv is not installed.
+
+    Handles basic .env format:
+    - KEY=value
+    - KEY="quoted value"
+    - KEY='single quoted'
+    - # comments (full line)
+    - Empty lines ignored
+
+    Args:
+        path: Path to .env file (str or Path)
+
+    Returns:
+        Dictionary of environment variables
+    """
+    env_vars = {}
+    try:
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith('#'):
+                    continue
+                # Parse KEY=value
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Remove surrounding quotes
+                    if (value.startswith('"') and value.endswith('"')) or \
+                       (value.startswith("'") and value.endswith("'")):
+                        value = value[1:-1]
+                    env_vars[key] = value
+    except Exception:
+        pass
+    return env_vars
+
+
 try:
     from dotenv import dotenv_values
 except ImportError:
-    dotenv_values = None
+    # Use fallback parser when python-dotenv not installed
+    dotenv_values = _parse_env_file_fallback
 
 
 def find_project_root() -> Optional[Path]:
@@ -125,12 +166,7 @@ def resolve_env(
     if verbose:
         print(f"✗ {var_name} not in: Runtime environment")
 
-    # Check dotenv availability
-    if not dotenv_values:
-        if verbose:
-            print("⚠ python-dotenv not installed, cannot check .env files")
-            print("  Install with: pip install python-dotenv")
-        return default
+    # Note: dotenv_values is always available (uses fallback if python-dotenv not installed)
 
     # Priority 2-7: Check .env files in order
     env_paths = get_env_file_paths(skill)
@@ -183,10 +219,7 @@ def find_all(var_name: str, skill: Optional[str] = None) -> List[Tuple[str, str,
     if value:
         results.append(("Runtime environment", value, None))
 
-    if not dotenv_values:
-        return results
-
-    # Check all .env files
+    # Check all .env files (dotenv_values always available via fallback)
     env_paths = get_env_file_paths(skill)
 
     for description, path in env_paths:

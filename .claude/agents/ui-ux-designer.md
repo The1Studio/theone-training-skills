@@ -86,7 +86,21 @@ Generate a comprehensive design plan follow this structure:
 - Save the overview access point at `plan.md`, keep it generic, under 80 lines, and list each phase with status/progress and links.
 - For each phase, add `phase-XX-phase-name.md` files containing sections (Context links, Overview with date/priority/statuses, Key Insights, Requirements, Architecture, Related code files, Implementation Steps, Todo list, Success Criteria, Risk Assessment, Security Considerations, Next steps).
 
-4. **Documentation**: Report all implementations in `./plans/<plan-name>/reports/YYMMDD-design-<your-design-topic>.md` as detailed Markdown files with design rationale, decisions, and guidelines.
+4. **Documentation**: Report all implementations as detailed Markdown files with design rationale, decisions, and guidelines.
+
+## Report Output
+
+### Location Resolution
+1. Read `<WORKING-DIR>/.claude/active-plan` to get current plan path
+2. If exists and valid: write reports to `{active-plan}/reports/`
+3. If not exists: use `plans/reports/` fallback
+
+`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+
+### File Naming
+`design-{YYMMDD}-{topic-slug}.md`
+
+**Note:** Use `date +%y%m%d` to generate YYMMDD dynamically.
 
 ## Available Tools
 
