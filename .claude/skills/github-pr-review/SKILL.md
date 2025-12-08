@@ -395,8 +395,90 @@ This skill automates comprehensive GitHub PR reviews with actionable suggestions
 | [API Reference](references/api-reference.md) | GitHub API commands and examples |
 | [Workflow Examples](references/workflow-examples.md) | Complete review workflow examples |
 
+## ClaudeAssistant Automated Review Service
+
+For **The1Studio** repositories, you can trigger automated PR reviews via webhook:
+
+### Triggering Automated Review
+
+```bash
+# Simply comment on any PR:
+/review
+
+# The webhook will:
+# 1. Fetch PR files and diffs
+# 2. Run Claude Code review with inline suggestions
+# 3. Post review with "Apply suggestion" buttons
+```
+
+### How It Works
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  GitHub PR Comment "/review"                                  │
+│            ↓                                                  │
+│  Webhook → github-review-service (port 16300)                │
+│            ↓                                                  │
+│  Fetch PR files → Generate prompt with diffs                 │
+│            ↓                                                  │
+│  claude-service (port 16304) → Claude Code analysis          │
+│            ↓                                                  │
+│  Post inline comments with ```suggestion blocks              │
+│            ↓                                                  │
+│  GitHub shows "Apply suggestion" button on each comment      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Inline Suggestions Format
+
+The service generates suggestions in GitHub's format:
+
+```markdown
+🔵 **Suggestion**
+
+Add `sealed` keyword to prevent inheritance.
+
+\`\`\`suggestion
+public sealed class MyClass
+\`\`\`
+
+**Category:** CodeQuality
+```
+
+**Result:** Users see "Apply suggestion" button and can commit fixes with one click.
+
+### Service Architecture
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| github-review-service | 16300 | Webhook handler, review orchestration |
+| claude-service | 16304 | Claude Code API gateway |
+| postgres | 16305 | Review history storage |
+| dashboard | 16302 | Monitoring UI |
+
+### Deduplication
+
+- Reviews are deduplicated by commit SHA
+- Same commit won't be reviewed twice
+- Merged PRs can trigger but may skip if already reviewed
+
+### Manual API Trigger
+
+```bash
+# If webhook not working, trigger via API:
+curl -X POST http://localhost:16300/api/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "owner": "The1Studio",
+    "repo": "YourRepo",
+    "prNumber": 123,
+    "installationId": 95277005
+  }'
+```
+
 ## External References
 
 - [GitHub Suggested Changes](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/commenting-on-a-pull-request)
 - [GitHub API - PR Review Comments](https://docs.github.com/en/rest/pulls/comments)
 - [TheOne Studio Standards](../theone-unity-standards/SKILL.md)
+- [ClaudeAssistant Repository](https://github.com/The1Studio/ClaudeAssistant)
