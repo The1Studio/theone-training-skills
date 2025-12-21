@@ -3,10 +3,23 @@ description: ⚡⚡ Analyze and fix UI issues
 argument-hint: [issue]
 ---
 
+## Required Skills (Priority Order)
+1. **`ui-ux-pro-max`** - Design intelligence database (ALWAYS ACTIVATE FIRST)
+2. **`aesthetic`** - Design principles
+3. **`frontend-design`** - Implementation patterns
+
 Use `ui-ux-designer` subagent to read and analyze `./docs/design-guidelines.md` then fix the following issues:
 <issue>$ARGUMENTS</issue>
 
 ## Workflow
+**FIRST**: Run `ui-ux-pro-max` searches to understand context and common issues:
+```bash
+python3 $HOME/.claude/skills/ui-ux-pro-max/scripts/search.py "<product-type>" --domain product
+python3 $HOME/.claude/skills/ui-ux-pro-max/scripts/search.py "<style-keywords>" --domain style
+python3 $HOME/.claude/skills/ui-ux-pro-max/scripts/search.py "accessibility" --domain ux
+python3 $HOME/.claude/skills/ui-ux-pro-max/scripts/search.py "z-index animation" --domain ux
+```
+
 If the user provides a screenshots or videos, use `ai-multimodal` skill to describe as detailed as possible the issue, make sure developers can predict the root causes easily based on the description.
 
 1. Use `ui-ux-designer` subagent to implement the fix step by step.

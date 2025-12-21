@@ -41,20 +41,45 @@ When Read fails with "exceeds maximum allowed tokens":
 
 ---
 
-## Active Plan State Management
+## Plan Folder Naming (CRITICAL - Read Carefully)
 
-After creating a new plan folder, update the state file:
+**STEP 1: Check for "Plan Context" section above.**
 
-1. Write plan path to `<WORKING-DIR>/.claude/active-plan`
-2. Use relative path from project root (e.g., `plans/20251128-1654-feature-name`)
-
-`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
-
-```bash
-echo "plans/YYYYMMDD-HHmm-plan-name" > .claude/active-plan
+If you see a section like this at the start of your context:
+```
+## Plan Context (auto-injected)
+- Active Plan: plans/251201-1530-feature-name
+- Reports Path: plans/251201-1530-feature-name/reports/
+- Naming Format: {date}-{issue}-{slug}
+- Issue ID: GH-88
+- Git Branch: kai/feat/plan-name-config
 ```
 
-This ensures all subsequent agents know where to write reports.
+**STEP 2: Apply the naming format.**
+
+| If Plan Context shows... | Then create folder like... |
+|--------------------------|---------------------------|
+| `Naming Format: {date}-{slug}` | `plans/{date}-my-feature/` |
+| `Naming Format: {date}-{issue}-{slug}` + `Issue ID: GH-88` | `plans/{date}-GH88-my-feature/` |
+| No Plan Context present | `plans/{date}-my-feature/` (default) |
+
+**STEP 3: Get current date dynamically.**
+
+Use `$CK_PLAN_DATE_FORMAT` env var (injected by session hooks) for the format.
+
+**STEP 4: Update session state after creating plan.**
+
+After creating the plan folder, update session state so subagents receive the latest context:
+```bash
+node .claude/scripts/set-active-plan.cjs plans/{your-folder-name}
+```
+
+Example:
+```bash
+node .claude/scripts/set-active-plan.cjs plans/251201-1430-GH88-add-authentication
+```
+
+This updates the session temp file so all subsequent subagents receive the correct plan context.
 
 ---
 

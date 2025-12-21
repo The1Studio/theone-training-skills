@@ -9,7 +9,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const scriptPath = path.join(__dirname, '..', 'scout-block.sh');
+const scriptPath = path.join(__dirname, '..', 'scout-block', 'scout-block.sh');
 const ckignorePath = path.join(__dirname, '..', '..', '.ckignore');
 const ckignoreBackupPath = ckignorePath + '.backup';
 

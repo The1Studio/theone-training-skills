@@ -24,6 +24,7 @@ $2
 Base on the requirements:
 - Always keep in mind that `SKILL.md` and reference files should be token consumption efficient, so that **progressive disclosure** can be leveraged at best.
 - `SKILL.md` is always short and concise, straight to the point, treat it as a quick reference guide.
+- If you're given nothing, use `AskUserQuestion` tool for clarifications and `researcher` subagent to research about the topic.
 - If you're given an URL, it's documentation page, use `Explore` subagent to explore every internal link and report back to main agent, don't skip any link.
 - If you receive a lot of URLs, use multiple `Explore` subagents to explore them in parallel, then report back to main agent.
 - If you receive a lot of files, use multiple `Explore` subagents to explore them in parallel, then report back to main agent.

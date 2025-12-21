@@ -1,19 +1,139 @@
 # Skills Installation Script for Windows (PowerShell)
 # Installs all dependencies for Claude Code skills
+#
+# Exit codes (rustup model):
+#   0 = Success (full or partial)
+#   1 = Fatal error (no Python, broken venv)
+#   2 = Partial success (some optional deps failed)
 
 param(
     [switch]$SkipChocolatey = $false,
     [switch]$Help = $false,
-    [switch]$Y = $false  # Skip all prompts and auto-confirm
+    [switch]$Y = $false,           # Skip all prompts and auto-confirm
+    [switch]$WithAdmin = $false,   # Use admin-requiring package managers (choco)
+    [switch]$Resume = $false,      # Resume from previous interrupted installation
+    [switch]$RetryFailed = $false  # Retry previously failed packages
 )
 
 # Configuration
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir = Join-Path $ScriptDir ".venv"
+$StateFile = Join-Path $ScriptDir ".install-state.json"
+$LogDir = Join-Path $VenvDir "logs"
+$ErrorSummaryFile = Join-Path $ScriptDir ".install-error-summary.json"
 
 # Check for NON_INTERACTIVE environment variable
 if ($env:NON_INTERACTIVE -eq "1") {
     $Y = $true
+}
+
+# ============================================================================
+# Installation Tracking Variables
+# ============================================================================
+$Script:INSTALLED_CRITICAL = [System.Collections.ArrayList]::new()
+$Script:INSTALLED_OPTIONAL = [System.Collections.ArrayList]::new()
+$Script:FAILED_OPTIONAL = [System.Collections.ArrayList]::new()
+$Script:SKIPPED_ADMIN = [System.Collections.ArrayList]::new()
+$Script:FINAL_EXIT_CODE = 0
+
+# ============================================================================
+# Tracking Functions
+# ============================================================================
+function Track-Success {
+    param(
+        [string]$Category,  # "critical" or "optional"
+        [string]$Name
+    )
+    if ($Category -eq "critical") {
+        [void]$Script:INSTALLED_CRITICAL.Add($Name)
+    } else {
+        [void]$Script:INSTALLED_OPTIONAL.Add($Name)
+    }
+}
+
+function Track-Failure {
+    param(
+        [string]$Category,  # "critical" or "optional"
+        [string]$Name,
+        [string]$Reason
+    )
+    if ($Category -eq "critical") {
+        $Script:FINAL_EXIT_CODE = 1
+    } else {
+        [void]$Script:FAILED_OPTIONAL.Add("${Name}: ${Reason}")
+        if ($Script:FINAL_EXIT_CODE -eq 0) {
+            $Script:FINAL_EXIT_CODE = 2
+        }
+    }
+}
+
+function Track-Skipped {
+    param(
+        [string]$Name,
+        [string]$Reason
+    )
+    [void]$Script:SKIPPED_ADMIN.Add("${Name}: ${Reason}")
+}
+
+# ============================================================================
+# State Persistence Functions
+# ============================================================================
+function Initialize-State {
+    if ($Resume -and (Test-Path $StateFile)) {
+        Write-Info "Resuming from previous installation..."
+        return
+    }
+
+    # Create fresh state
+    $state = @{
+        version = 1
+        started_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        last_updated = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        phases = @{
+            chocolatey = "pending"
+            system_deps = "pending"
+            node_deps = "pending"
+            python_env = "pending"
+            verify = "pending"
+        }
+        packages = @{
+            installed = @()
+            failed = @()
+            skipped = @()
+        }
+    }
+    $state | ConvertTo-Json -Depth 5 | Set-Content $StateFile -Encoding UTF8
+}
+
+function Update-Phase {
+    param(
+        [string]$Phase,
+        [string]$Status
+    )
+    if (-not (Test-Path $StateFile)) {
+        return
+    }
+
+    $state = Get-Content $StateFile -Raw | ConvertFrom-Json
+    $state.phases.$Phase = $Status
+    $state.last_updated = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+    $state | ConvertTo-Json -Depth 5 | Set-Content $StateFile -Encoding UTF8
+}
+
+function Test-PhaseDone {
+    param([string]$Phase)
+    if (-not (Test-Path $StateFile)) {
+        return $false
+    }
+    $state = Get-Content $StateFile -Raw | ConvertFrom-Json
+    return ($state.phases.$Phase -eq "done")
+}
+
+function Remove-StateFile {
+    if (Test-Path $StateFile) {
+        Remove-Item $StateFile -Force
+        Write-Info "Installation state cleaned (success)"
+    }
 }
 
 # Colors for output
@@ -66,6 +186,80 @@ function Test-Command {
     return $false
 }
 
+# Find Python executable, handling Windows Store aliases
+# Returns: hashtable with 'Path' and 'Version', or $null if not found
+function Find-Python {
+    # Priority 1: Check py launcher first (most reliable on Windows)
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py) {
+        try {
+            $version = (& py --version 2>&1)
+            if ($LASTEXITCODE -eq 0 -and $version -match 'Python') {
+                return @{ Path = $py.Source; Version = $version; Command = "py" }
+            }
+        } catch { }
+    }
+
+    # Priority 2: Check common Python install paths
+    $commonPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe",
+        "C:\Python3*\python.exe",
+        "C:\Python*\python.exe",
+        "$env:ProgramFiles\Python3*\python.exe",
+        "$env:ProgramFiles\Python*\python.exe",
+        "$env:ProgramFiles(x86)\Python3*\python.exe"
+    )
+
+    foreach ($pathPattern in $commonPaths) {
+        $found = Get-Item $pathPattern -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+        if ($found) {
+            try {
+                $version = (& $found.FullName --version 2>&1)
+                if ($LASTEXITCODE -eq 0 -and $version -match 'Python') {
+                    return @{ Path = $found.FullName; Version = $version; Command = $found.FullName }
+                }
+            } catch { }
+        }
+    }
+
+    # Priority 3: Check PATH but detect Windows Store alias
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        # Detect Windows Store alias (points to WindowsApps)
+        if ($python.Source -like "*WindowsApps*") {
+            Write-Warning "Windows Store Python alias detected at: $($python.Source)"
+            Write-Warning "This alias redirects to Microsoft Store instead of running Python."
+            Write-Info "To fix this, either:"
+            Write-Info "  1. Install Python from https://www.python.org/downloads/"
+            Write-Info "  2. Or disable the alias: Settings > Apps > Advanced app settings > App execution aliases"
+            Write-Info "     Then turn off 'python.exe' and 'python3.exe'"
+            return $null
+        }
+
+        # Valid Python in PATH
+        try {
+            $version = (& python --version 2>&1)
+            if ($LASTEXITCODE -eq 0 -and $version -match 'Python') {
+                return @{ Path = $python.Source; Version = $version; Command = "python" }
+            }
+        } catch { }
+    }
+
+    # Priority 4: Try python3 command
+    $python3 = Get-Command python3 -ErrorAction SilentlyContinue
+    if ($python3 -and -not ($python3.Source -like "*WindowsApps*")) {
+        try {
+            $version = (& python3 --version 2>&1)
+            if ($LASTEXITCODE -eq 0 -and $version -match 'Python') {
+                return @{ Path = $python3.Source; Version = $version; Command = "python3" }
+            }
+        } catch { }
+    }
+
+    return $null
+}
+
 # Get available package manager (priority: winget > scoop > choco)
 function Get-PackageManager {
     if (Test-Command "winget") { return "winget" }
@@ -76,13 +270,15 @@ function Get-PackageManager {
 
 # Install package using available package manager
 # Returns $true if installed, $false if failed
+# Now with tracking support
 function Install-WithPackageManager {
     param(
         [string]$DisplayName,
         [string]$WingetId,
         [string]$ChocoName,
         [string]$ScoopName,
-        [string]$ManualUrl
+        [string]$ManualUrl,
+        [string]$Category = "optional"  # "critical" or "optional"
     )
 
     $pm = Get-PackageManager
@@ -98,6 +294,7 @@ function Install-WithPackageManager {
             }
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "$DisplayName installed via winget"
+                Track-Success -Category $Category -Name $DisplayName
                 return $true
             }
         }
@@ -106,24 +303,33 @@ function Install-WithPackageManager {
             scoop install $ScoopName 2>$null
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "$DisplayName installed via scoop"
+                Track-Success -Category $Category -Name $DisplayName
                 return $true
             }
         }
         "choco" {
-            if (Test-Administrator) {
+            if ($WithAdmin -and (Test-Administrator)) {
                 Write-Info "Installing $DisplayName via chocolatey..."
                 choco install $ChocoName -y 2>$null
                 if ($LASTEXITCODE -eq 0) {
                     Write-Success "$DisplayName installed via chocolatey"
+                    Track-Success -Category $Category -Name $DisplayName
                     return $true
                 }
+            } elseif (-not $WithAdmin) {
+                Write-Info "${DisplayName}: skipped (no -WithAdmin flag)"
+                Track-Skipped -Name $DisplayName -Reason "requires admin"
+                return $false
             } else {
                 Write-Warning "Chocolatey requires admin. Skipping $DisplayName..."
+                Track-Skipped -Name $DisplayName -Reason "not running as admin"
+                return $false
             }
         }
     }
 
     Write-Warning "$DisplayName not installed. Install manually from: $ManualUrl"
+    Track-Failure -Category $Category -Name $DisplayName -Reason "installation failed"
     return $false
 }
 
@@ -230,31 +436,36 @@ function Install-SystemDeps {
     if (Test-Command "ffmpeg") {
         $ffmpegVersion = (ffmpeg -version 2>&1 | Select-Object -First 1)
         Write-Success "FFmpeg already installed ($ffmpegVersion)"
+        Track-Success -Category "optional" -Name "FFmpeg"
     } else {
         $null = Install-WithPackageManager `
             -DisplayName "FFmpeg" `
             -WingetId "Gyan.FFmpeg" `
             -ChocoName "ffmpeg" `
             -ScoopName "ffmpeg" `
-            -ManualUrl "https://ffmpeg.org/download.html"
+            -ManualUrl "https://ffmpeg.org/download.html" `
+            -Category "optional"
     }
 
     # ImageMagick
     if (Test-Command "magick") {
         Write-Success "ImageMagick already installed"
+        Track-Success -Category "optional" -Name "ImageMagick"
     } else {
         $null = Install-WithPackageManager `
             -DisplayName "ImageMagick" `
             -WingetId "ImageMagick.ImageMagick" `
             -ChocoName "imagemagick" `
             -ScoopName "imagemagick" `
-            -ManualUrl "https://imagemagick.org/script/download.php"
+            -ManualUrl "https://imagemagick.org/script/download.php" `
+            -Category "optional"
     }
 
     # Docker (optional)
     if (Test-Command "docker") {
         $dockerVersion = (docker --version)
         Write-Success "Docker already installed ($dockerVersion)"
+        Track-Success -Category "optional" -Name "Docker"
     } else {
         Write-Warning "Docker not found. Skipping (optional)..."
         Write-Info "Install Docker from: https://docs.docker.com/desktop/install/windows-install/"
@@ -366,27 +577,94 @@ function Install-NodeDeps {
     }
 }
 
+# Try pip install with wheel-first fallback
+# Returns $true if successful, $false otherwise
+function Try-PipInstall {
+    param(
+        [string]$PackageSpec,
+        [string]$LogFile
+    )
+
+    $packageName = ($PackageSpec -split '[=<>]')[0]
+
+    # Phase 1: Try with prefer-binary (wheels first)
+    $output = pip install $PackageSpec --prefer-binary 2>&1
+    $output | Out-File -Append $LogFile -Encoding UTF8
+    if ($LASTEXITCODE -eq 0) {
+        return $true
+    }
+
+    # Phase 2: Check if we can build from source
+    $hasBuildTools = (Test-Command "cl") -or (Test-Command "gcc")
+    if (-not $hasBuildTools) {
+        Write-Warning "${packageName}: No wheel available, no build tools"
+        Write-Info "Install Visual Studio Build Tools from: https://visualstudio.microsoft.com/visual-cpp-build-tools/"
+        return $false
+    }
+
+    # Phase 3: Try source build
+    Write-Info "Trying source build for $packageName..."
+    $output = pip install $PackageSpec --no-binary $packageName 2>&1
+    $output | Out-File -Append $LogFile -Encoding UTF8
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "$packageName installed (source build)"
+        return $true
+    }
+
+    Write-Error "${packageName}: Both wheel and source build failed"
+    return $false
+}
+
 # Setup Python virtual environment
 function Setup-PythonEnv {
     Write-Header "Setting Up Python Environment"
 
-    # Check Python
-    if (Test-Command "python") {
-        $pythonVersion = (python --version)
-        Write-Success "Python found ($pythonVersion)"
+    # Track successful and failed installations
+    $successfulSkills = [System.Collections.ArrayList]::new()
+    $failedSkills = [System.Collections.ArrayList]::new()
+
+    # Find Python using robust detection (handles Windows Store aliases)
+    $pythonInfo = Find-Python
+    if ($pythonInfo) {
+        Write-Success "Python found ($($pythonInfo.Version))"
+        Write-Info "Using: $($pythonInfo.Command)"
+        $pythonCmd = $pythonInfo.Command
     } else {
-        Write-Error "Python not found. Please install Python 3.7+ from: https://www.python.org/downloads/"
+        Write-Error "Python not found or only Windows Store alias detected."
+        Write-Info "Please install Python 3.7+ from: https://www.python.org/downloads/"
         Write-Info "Make sure to check 'Add Python to PATH' during installation"
-        exit 1
+        Track-Failure -Category "critical" -Name "Python" -Reason "not installed or Store alias"
+        return  # Don't exit, return and let final report show
     }
 
     # Create virtual environment
     if (Test-Path $VenvDir) {
-        Write-Success "Virtual environment already exists at $VenvDir"
+        # Verify venv is valid
+        $activateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
+        $pythonExe = Join-Path $VenvDir "Scripts\python.exe"
+        if ((Test-Path $activateScript) -and (Test-Path $pythonExe)) {
+            Write-Success "Virtual environment already exists at $VenvDir"
+        } else {
+            Write-Warning "Virtual environment is corrupted. Recreating..."
+            Remove-Item -Recurse -Force $VenvDir
+            & $pythonCmd -m venv $VenvDir
+            Write-Success "Virtual environment recreated"
+        }
     } else {
         Write-Info "Creating virtual environment at $VenvDir..."
-        python -m venv $VenvDir
-        Write-Success "Virtual environment created"
+        & $pythonCmd -m venv $VenvDir
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Virtual environment created"
+        } else {
+            Write-Error "Failed to create virtual environment"
+            Track-Failure -Category "critical" -Name "Python venv" -Reason "venv creation failed"
+            return
+        }
+    }
+
+    # Create log directory
+    if (-not (Test-Path $LogDir)) {
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
     }
 
     # Activate and install packages
@@ -397,12 +675,20 @@ function Setup-PythonEnv {
         & $activateScript
     } else {
         Write-Error "Failed to find activation script at $activateScript"
-        exit 1
+        Track-Failure -Category "critical" -Name "Python venv" -Reason "activation failed"
+        return
     }
 
-    # Upgrade pip
+    # Upgrade pip with prefer-binary
     Write-Info "Upgrading pip..."
-    python -m pip install --upgrade pip --quiet
+    $pipLogFile = Join-Path $LogDir "pip-upgrade.log"
+    pip install --upgrade pip --prefer-binary 2>&1 | Tee-Object -FilePath $pipLogFile
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "pip upgraded successfully"
+    } else {
+        Write-Warning "pip upgrade failed (continuing anyway)"
+        Write-Info "See log: $pipLogFile"
+    }
 
     # Install dependencies from all skills' requirements.txt files
     Write-Info "Installing Python dependencies from all skills..."
@@ -416,33 +702,69 @@ function Setup-PythonEnv {
             return
         }
 
-        # Install main requirements.txt
+        # Install main requirements.txt with wheel-first approach
         $requirementsPath = Join-Path $_.FullName "scripts\requirements.txt"
         if (Test-Path $requirementsPath) {
+            $skillLogFile = Join-Path $LogDir "install-${skillName}.log"
             Write-Info "Installing $skillName dependencies..."
-            try {
-                pip install -r $requirementsPath --quiet 2>$null
+
+            # Read requirements and install one-by-one for granular tracking
+            $pkgSuccess = 0
+            $pkgFail = 0
+            Get-Content $requirementsPath | ForEach-Object {
+                $line = $_.Trim()
+                # Skip comments and empty lines
+                if ($line -match '^#' -or [string]::IsNullOrWhiteSpace($line)) {
+                    return
+                }
+
+                if (Try-PipInstall -PackageSpec $line -LogFile $skillLogFile) {
+                    $pkgSuccess++
+                } else {
+                    $pkgFail++
+                    Track-Failure -Category "optional" -Name "${skillName}:${line}" -Reason "Package install failed"
+                }
+            }
+
+            if ($pkgFail -eq 0) {
+                Write-Success "${skillName}: all $pkgSuccess packages installed"
+                Track-Success -Category "optional" -Name $skillName
+                [void]$successfulSkills.Add($skillName)
                 $installedCount++
-            } catch {
-                Write-Warning "Some $skillName dependencies failed to install (may be optional)"
+            } else {
+                Write-Warning "${skillName}: $pkgSuccess installed, $pkgFail failed"
+                [void]$failedSkills.Add($skillName)
             }
         }
 
         # Install test requirements.txt
         $testRequirementsPath = Join-Path $_.FullName "scripts\tests\requirements.txt"
         if (Test-Path $testRequirementsPath) {
-            try {
-                pip install -r $testRequirementsPath --quiet 2>$null
-            } catch {
-                Write-Warning "Some $skillName test dependencies failed to install (may be optional)"
+            $testLogFile = Join-Path $LogDir "install-${skillName}-tests.log"
+            Write-Info "Installing $skillName test dependencies..."
+
+            pip install -r $testRequirementsPath --prefer-binary 2>&1 | Tee-Object -FilePath $testLogFile
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "$skillName test dependencies installed successfully"
+            } else {
+                Write-Warning "$skillName test dependencies failed to install"
             }
         }
     }
 
-    if ($installedCount -eq 0) {
+    # Print installation summary (brief - final report comes later)
+    Write-Header "Python Dependencies Installation Summary"
+
+    if ($successfulSkills.Count -gt 0) {
+        Write-Success "Successfully installed $($successfulSkills.Count) skill(s)"
+    }
+
+    if ($failedSkills.Count -gt 0) {
+        Write-Warning "$($failedSkills.Count) skill(s) had package failures (see final report)"
+    } elseif ($successfulSkills.Count -eq 0) {
         Write-Warning "No skill requirements.txt files found"
     } else {
-        Write-Success "Installed Python dependencies from $installedCount skills"
+        Write-Success "All Python dependencies installed successfully"
     }
 
     deactivate
@@ -496,27 +818,145 @@ function Test-Installations {
     }
 }
 
-# Print usage instructions
-function Show-Usage {
-    Write-Header "Installation Complete!"
+# ============================================================================
+# Final Report Functions
+# ============================================================================
 
+function Get-RemediationCommands {
+    $hasSudoSkipped = $Script:SKIPPED_ADMIN.Count -gt 0
+    $hasPythonFailed = $Script:FAILED_OPTIONAL.Count -gt 0
+
+    if (-not $hasSudoSkipped -and -not $hasPythonFailed) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "---------------------------------------------------" -ForegroundColor Blue
+    Write-Host "Manual Installation Commands:" -ForegroundColor Blue
+    Write-Host "---------------------------------------------------" -ForegroundColor Blue
+    Write-Host ""
+
+    if ($hasSudoSkipped) {
+        Write-Host "# System packages (use winget or scoop):"
+        foreach ($item in $Script:SKIPPED_ADMIN) {
+            $pkg = ($item -split ':')[0]
+            switch ($pkg) {
+                "FFmpeg" { Write-Host "winget install Gyan.FFmpeg" }
+                "ImageMagick" { Write-Host "winget install ImageMagick.ImageMagick" }
+                default { Write-Host "# ${pkg}: see documentation" }
+            }
+        }
+        Write-Host ""
+    }
+
+    if ($hasPythonFailed) {
+        Write-Host "# Python packages (may require build tools):"
+        Write-Host "# Install Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/"
+        Write-Host ".\.claude\skills\.venv\Scripts\Activate.ps1"
+
+        foreach ($item in $Script:FAILED_OPTIONAL) {
+            $pkg = ($item -split ':')[0]
+            # Extract package name from skill:package format
+            if ($pkg -match ':') {
+                $pkg = ($pkg -split ':')[1]
+            }
+            Write-Host "pip install $pkg"
+        }
+        Write-Host ""
+    }
+}
+
+function Write-FinalReport {
+    Write-Host ""
+    Write-Host "===================================================" -ForegroundColor Blue
+    Write-Host "           Installation Report" -ForegroundColor Blue
+    Write-Host "===================================================" -ForegroundColor Blue
+    Write-Host ""
+
+    # Installed section
+    $installedCount = $Script:INSTALLED_CRITICAL.Count + $Script:INSTALLED_OPTIONAL.Count
+    if ($installedCount -gt 0) {
+        Write-Host "Installed ($installedCount):" -ForegroundColor Green
+        foreach ($item in $Script:INSTALLED_CRITICAL) {
+            Write-Host "  [OK] $item" -ForegroundColor Green
+        }
+        foreach ($item in $Script:INSTALLED_OPTIONAL) {
+            Write-Host "  [OK] $item" -ForegroundColor Green
+        }
+        Write-Host ""
+    }
+
+    # Skipped section
+    if ($Script:SKIPPED_ADMIN.Count -gt 0) {
+        Write-Host "Skipped ($($Script:SKIPPED_ADMIN.Count)):" -ForegroundColor Yellow
+        foreach ($item in $Script:SKIPPED_ADMIN) {
+            $name = ($item -split ':')[0]
+            $reason = ($item -split ':')[1]
+            Write-Host "  [~] $name ($reason)" -ForegroundColor Yellow
+        }
+        Write-Host ""
+    }
+
+    # Degraded/Failed section
+    if ($Script:FAILED_OPTIONAL.Count -gt 0) {
+        Write-Host "Degraded ($($Script:FAILED_OPTIONAL.Count)):" -ForegroundColor Red
+        foreach ($item in $Script:FAILED_OPTIONAL) {
+            $name = ($item -split ':')[0]
+            $reason = ($item -split ':')[1]
+            Write-Host "  [!] $name ($reason)" -ForegroundColor Red
+        }
+        Write-Host ""
+    }
+
+    # Remediation commands
+    Get-RemediationCommands
+
+    # Exit status line
+    Write-Host "===================================================" -ForegroundColor Blue
+    switch ($Script:FINAL_EXIT_CODE) {
+        0 { Write-Host " Exit: 0 (success - all dependencies installed)" -ForegroundColor Green }
+        1 { Write-Host " Exit: 1 (failed - critical dependencies missing)" -ForegroundColor Red }
+        2 { Write-Host " Exit: 2 (partial - some optional deps failed)" -ForegroundColor Yellow }
+    }
+    Write-Host "===================================================" -ForegroundColor Blue
+    Write-Host ""
+}
+
+function Write-ErrorSummary {
+    # Only write if there are failures
+    if ($Script:FINAL_EXIT_CODE -eq 0) {
+        return
+    }
+
+    # Build JSON structure
+    $summary = @{
+        exit_code = $Script:FINAL_EXIT_CODE
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        critical_failures = @()
+        optional_failures = @($Script:FAILED_OPTIONAL)
+        skipped = @($Script:SKIPPED_ADMIN)
+        remediation = @{
+            winget_packages = "winget install Gyan.FFmpeg ImageMagick.ImageMagick"
+            build_tools = "https://visualstudio.microsoft.com/visual-cpp-build-tools/"
+            pip_retry = ".\.claude\skills\.venv\Scripts\Activate.ps1; pip install <package>"
+        }
+    }
+
+    # Use Out-File with UTF8NoBOM for proper JSON encoding (PS 6+) or UTF8 (PS 5)
+    $jsonContent = $summary | ConvertTo-Json -Depth 5
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        $jsonContent | Out-File -FilePath $ErrorSummaryFile -Encoding utf8NoBOM -NoNewline
+    } else {
+        # PowerShell 5.x: Use .NET to write UTF-8 without BOM
+        [System.IO.File]::WriteAllText($ErrorSummaryFile, $jsonContent, [System.Text.UTF8Encoding]::new($false))
+    }
+    Write-Info "Error summary written to: $ErrorSummaryFile"
+}
+
+# Print usage instructions (now just brief tips)
+function Show-Usage {
     Write-Host "To use the Python virtual environment:" -ForegroundColor Green
     Write-Host "  .\.claude\skills\.venv\Scripts\Activate.ps1"
-    Write-Host ""
-    Write-Host "To verify installations:" -ForegroundColor Green
-    Write-Host "  ffmpeg -version"
-    Write-Host "  magick -version"
-    Write-Host "  rmbg --version"
-    Write-Host "  node --version"
-    Write-Host ""
-    Write-Host "To run tests:" -ForegroundColor Green
-    Write-Host "  .\.claude\skills\.venv\Scripts\Activate.ps1"
-    Write-Host "  cd .claude\skills\<skill-name>\scripts"
-    Write-Host "  pytest tests\ -v"
-    Write-Host ""
-    Write-Host "Environment variables:" -ForegroundColor Green
-    Write-Host "  Create .claude\skills\.env for shared config"
-    Write-Host "  Create .claude\skills\<skill-name>\.env for skill-specific config"
     Write-Host ""
     Write-Host "For more information, see:" -ForegroundColor Blue
     Write-Host "  .claude\skills\INSTALLATION.md"
@@ -532,18 +972,27 @@ function Show-Help {
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -Y                 Skip all prompts and auto-confirm installation"
+    Write-Host "  -WithAdmin         Use admin-requiring package managers (chocolatey)"
+    Write-Host "  -Resume            Resume from previous interrupted installation"
+    Write-Host "  -RetryFailed       Retry previously failed packages"
     Write-Host "  -SkipChocolatey    Skip Chocolatey installation (uses winget/scoop instead)"
     Write-Host "  -Help              Show this help message"
     Write-Host ""
+    Write-Host "Exit Codes:"
+    Write-Host "  0  Success (all dependencies installed)"
+    Write-Host "  1  Fatal error (critical dependencies missing)"
+    Write-Host "  2  Partial success (some optional deps failed)"
+    Write-Host ""
     Write-Host "Examples:"
-    Write-Host "  .\install.ps1"
-    Write-Host "  .\install.ps1 -Y"
-    Write-Host "  .\install.ps1 -SkipChocolatey"
+    Write-Host "  .\install.ps1                  # Normal install"
+    Write-Host "  .\install.ps1 -Y               # Non-interactive"
+    Write-Host "  .\install.ps1 -WithAdmin       # Use chocolatey if admin"
+    Write-Host "  .\install.ps1 -Resume          # Resume interrupted install"
     Write-Host ""
     Write-Host "Package Manager Priority:"
     Write-Host "  1. winget (recommended, no admin required)"
     Write-Host "  2. scoop (no admin required)"
-    Write-Host "  3. chocolatey (requires admin)"
+    Write-Host "  3. chocolatey (requires admin + -WithAdmin flag)"
     Write-Host ""
     Write-Host "Requirements:"
     Write-Host "  - PowerShell 5.1 or higher"
@@ -558,7 +1007,7 @@ function Main {
         exit 0
     }
 
-    Clear-Host
+    Write-Host ""  # Just add spacing, don't clear terminal
     Write-Header "Claude Code Skills Installation (Windows)"
     Write-Info "Script directory: $ScriptDir"
 
@@ -569,6 +1018,16 @@ function Main {
     } else {
         Write-Warning "No package manager detected (winget, scoop, or choco)"
         Write-Info "Install winget: https://aka.ms/getwinget"
+    }
+
+    # Show mode info
+    if ($WithAdmin) {
+        Write-Info "Mode: with admin (chocolatey enabled)"
+    } else {
+        Write-Info "Mode: without admin (system packages may be skipped)"
+    }
+    if ($Resume) {
+        Write-Info "Mode: resuming previous installation"
     }
     Write-Host ""
 
@@ -583,17 +1042,61 @@ function Main {
         Write-Info "Auto-confirming installation (-Y flag or NON_INTERACTIVE mode)"
     }
 
-    try {
+    # Initialize state tracking
+    Initialize-State
+
+    # Phase 1: Chocolatey (optional)
+    if (-not (Test-PhaseDone "chocolatey")) {
+        Update-Phase "chocolatey" "running"
         $null = Install-Chocolatey
-        Install-SystemDeps
-        Install-NodeDeps
-        Setup-PythonEnv
-        Test-Installations
-        Show-Usage
-    } catch {
-        Write-Error "Installation failed: $_"
-        exit 1
+        Update-Phase "chocolatey" "done"
     }
+
+    # Phase 2: System deps
+    if (Test-PhaseDone "system_deps") {
+        Write-Success "System deps: already processed (resume)"
+    } else {
+        Update-Phase "system_deps" "running"
+        Install-SystemDeps
+        Update-Phase "system_deps" "done"
+    }
+
+    # Phase 3: Node deps
+    if (Test-PhaseDone "node_deps") {
+        Write-Success "Node deps: already installed (resume)"
+    } else {
+        Update-Phase "node_deps" "running"
+        Install-NodeDeps
+        Update-Phase "node_deps" "done"
+    }
+
+    # Phase 4: Python env
+    if (Test-PhaseDone "python_env") {
+        Write-Success "Python env: already set up (resume)"
+    } else {
+        Update-Phase "python_env" "running"
+        Setup-PythonEnv
+        Update-Phase "python_env" "done"
+    }
+
+    # Phase 5: Verify
+    Update-Phase "verify" "running"
+    Test-Installations
+    Update-Phase "verify" "done"
+
+    # Print final report with all tracking info
+    Write-FinalReport
+    Show-Usage
+
+    # Write error summary for CLI to parse
+    Write-ErrorSummary
+
+    # Clean state on complete success
+    if ($Script:FINAL_EXIT_CODE -eq 0) {
+        Remove-StateFile
+    }
+
+    exit $Script:FINAL_EXIT_CODE
 }
 
 # Run main function

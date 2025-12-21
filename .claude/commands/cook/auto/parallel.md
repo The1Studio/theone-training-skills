@@ -22,7 +22,7 @@ argument-hint: [tasks]
 - Read `plan.md` for dependency graph
 - Launch multiple `fullstack-developer` agents in PARALLEL for concurrent phases
   - Example: "Phases 1-3 parallel" → launch 3 agents simultaneously
-  - Pass phase file path: `plans/YYYYMMDD-HHmm-plan-name/phase-XX-*.md`
+  - Pass phase file path: `plans/{date}-plan-name/phase-XX-*.md`
   - Include environment info
 - Wait for all parallel phases complete before dependent phases
 - Sequential phases: launch one agent at a time

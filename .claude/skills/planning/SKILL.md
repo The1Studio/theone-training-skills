@@ -61,7 +61,7 @@ Load: `references/output-standards.md`
 **Plan Directory Structure**
 ```
 plans/
-└── YYYYMMDD-HHmm-plan-name/
+└── {date}-plan-name/
     ├── research/
     │   ├── researcher-XX-report.md
     │   └── ...
@@ -78,36 +78,41 @@ plans/
 
 ## Active Plan State
 
-Prevents version proliferation by tracking current working plan.
+Prevents version proliferation by tracking current working plan via session state.
 
-### State File
-`<WORKING-DIR>/.claude/active-plan` - Single line containing path to current plan folder.
+### Active vs Suggested Plans
 
-`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+| Type | Env Var | Meaning |
+|------|---------|---------|
+| **Active** | `$CK_ACTIVE_PLAN` | Explicitly set via `set-active-plan.cjs` - use for reports |
+| **Suggested** | `$CK_SUGGESTED_PLAN` | Branch-matched, hint only - do NOT auto-use |
 
-**Example content:**
-```
-plans/20251128-1654-fix-agent-coordination
-```
+### How It Works
+
+Plan context is managed through:
+1. **`$CK_ACTIVE_PLAN` env var**: Only set for explicitly activated plans (via session state)
+2. **`$CK_SUGGESTED_PLAN` env var**: Branch-matched plans shown as hints, not directives
+3. **Session temp file**: `/tmp/ck-session-{id}.json` stores explicit activations only
+4. **SubagentStart hook**: Injects differentiated context (Active vs Suggested)
 
 ### Rules
 
-1. **Check first**: Before creating plan, check if `<WORKING-DIR>/.claude/active-plan` exists
-2. **Validate path**: If exists, verify the path is a valid directory
-3. **Prompt user**: If valid, ask "Continue with existing plan? [Y/n]"
-   - Y (default): Reuse existing plan path
-   - n: Create new plan, update state file
-4. **Set on create**: When creating new plan, write path to `<WORKING-DIR>/.claude/active-plan`
-5. **Reset**: User can delete file manually (`rm .claude/active-plan`) to start fresh
+1. **Check `$CK_ACTIVE_PLAN` first**: If set and valid directory, ask "Continue with existing plan? [Y/n]"
+2. **Check `$CK_SUGGESTED_PLAN` second**: If set, inform user "Found suggested plan from branch: {path}"
+   - This is a hint only - do NOT auto-use it
+   - Ask user if they want to activate it or create new
+3. **If neither set**: Proceed to create new plan
+4. **Update on create**: Run `node .claude/scripts/set-active-plan.cjs plans/...`
 
 ### Report Output Location
 
 All agents writing reports MUST:
-1. Read `<WORKING-DIR>/.claude/active-plan` to get current plan path
-2. Write reports to `{plan-path}/reports/`
-3. Use naming: `{agent}-{YYMMDD}-{slug}.md`
+1. Check `Plan Context` section injected by hooks for `Reports Path`
+2. Only `$CK_ACTIVE_PLAN` plans use plan-specific reports path
+3. `$CK_SUGGESTED_PLAN` plans use default `plans/reports/` (not plan folder)
+4. Use naming: `{agent}-{date}-{slug}.md`
 
-**Fallback:** If no active-plan file exists, use `plans/reports/`
+**Important:** Suggested plans do NOT get plan-specific reports - this prevents pollution of old plan folders.
 
 ## Quality Standards
 

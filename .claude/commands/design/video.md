@@ -6,15 +6,18 @@ argument-hint: [video]
 Think hard to plan & start designing follow exactly this video: 
 <video>$ARGUMENTS</video>
 
-**IMPORTANT**: Activate `aesthetic` and `frontend-design` skills.
-**IMPORTANT**: Analyze the list of skills  at `.claude/skills/*` and intelligently activate the skills that are needed for the task during the process.
+## Required Skills (Priority Order)
+1. **`ui-ux-pro-max`** - Design intelligence database (ALWAYS ACTIVATE FIRST)
+2. **`aesthetic`** - Design principles
+3. **`frontend-design`** - Video analysis and replication
+
 **Ensure token efficiency while maintaining high quality.**
 
 ## Workflow:
 1. Use `ai-multimodal` skills to describe super details of the video: be specific about describing every element, every interaction, every animation, every transition, every color, every font, every border, every spacing, every size, every shape, every texture, every material, every light, every shadow, every reflection, every refraction, every blur, every glow, every image, background transparency, etc.
    - **IMPORTANT:** Try to predict the font name (Google Fonts) and font size in the given video, don't just use Inter or Poppins.
 2. Use `ui-ux-designer` subagent to create a design plan following the progressive disclosure structure so the final result matches the video:
-   - Create a directory `plans/YYYYMMDD-HHmm-plan-name` (example: `plans/20251101-1505-authentication-and-profile-implementation`).
+   - Create a directory `plans/{date}-plan-name` (date format from `$CK_PLAN_DATE_FORMAT`).
    - Save the overview access point at `plan.md`, keep it generic, under 80 lines, and list each phase with status/progress and links.
    - For each phase, add `phase-XX-phase-name.md` files containing sections (Context links, Overview with date/priority/statuses, Key Insights, Requirements, Architecture, Related code files, Implementation Steps, Todo list, Success Criteria, Risk Assessment, Security Considerations, Next steps).
    - Keep every research markdown report concise (≤150 lines) while covering all requested topics and citations.

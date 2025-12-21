@@ -32,7 +32,7 @@ The `project-manager` agent MUST update these documents when:
 ### Plan Location
 Save plans in `./plans` directory with timestamp and descriptive name.
 
-**Format:** `plans/YYYYMMDD-HHmm-your-plan-name/`
+**Format:** `plans/{date}-your-plan-name/` (date format from `$CK_PLAN_DATE_FORMAT`)
 
 **Example:** `plans/20251101-1505-authentication-and-profile-implementation/`
 

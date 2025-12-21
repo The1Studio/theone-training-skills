@@ -1,11 +1,10 @@
 {
   "name": "ClaudeKit Engineer",
-  "version": "v1.17.1",
-  "installedAt": "2025-12-01T09:29:47.158Z",
+  "version": "v1.20.1",
+  "installedAt": "2025-12-19T12:34:00.401Z",
   "scope": "local",
   "installedFiles": [
     ".claude/",
-    ".opencode/",
     "plans/"
   ],
   "userConfigFiles": [

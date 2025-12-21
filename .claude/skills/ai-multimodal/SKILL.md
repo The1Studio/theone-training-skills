@@ -27,6 +27,10 @@ pip install google-genai python-dotenv pillow
   - TIP: When you're asked to analyze an image, check if `gemini` command is available, then use `"<prompt to analyze image>" | gemini -y -m gemini-2.5-flash` command. If `gemini` command is not available, use `python scripts/gemini_batch_process.py --files <file> --task analyze` command.
 **Generate content**: `python scripts/gemini_batch_process.py --task <generate|generate-video> --prompt "description"`
 
+> **Stdin support**: You can pipe files directly via stdin (auto-detects PNG/JPG/PDF/WAV/MP3).
+> - `cat image.png | python scripts/gemini_batch_process.py --task analyze --prompt "Describe this"`
+> - `python scripts/gemini_batch_process.py --files image.png --task analyze` (traditional)
+
 ## Models
 
 - **Image generation**: `imagen-4.0-generate-001` (standard), `imagen-4.0-ultra-generate-001` (quality), `imagen-4.0-fast-generate-001` (speed)

@@ -12,4 +12,4 @@ argument-hint: [tasks]
 ## Workflow:
 1. Trigger slash command `/plan <detailed-instruction-prompt>` to create an implementation plan based on the given tasks.
 2. Trigger slash command `/code <plan>` to implement the plan.
-3. Finally ask user if he wants to commit to git repository, if yes trigger `/git:cm` slash command to create a commit.
+3. Finally use `AskUserQuestion` tool to ask user if he wants to commit to git repository, if yes trigger `/git:cm` slash command to create a commit.

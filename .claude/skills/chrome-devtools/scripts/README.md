@@ -6,11 +6,26 @@ CLI scripts for browser automation using Puppeteer.
 
 ## Installation
 
+## Skill Location
+
+Skills can exist in **project-scope** or **user-scope**. Priority: project-scope > user-scope.
+
+```bash
+# Detect skill location
+SKILL_DIR=""
+if [ -d ".claude/skills/chrome-devtools/scripts" ]; then
+  SKILL_DIR=".claude/skills/chrome-devtools/scripts"
+elif [ -d "$HOME/.claude/skills/chrome-devtools/scripts" ]; then
+  SKILL_DIR="$HOME/.claude/skills/chrome-devtools/scripts"
+fi
+cd "$SKILL_DIR"
+```
+
 ### Quick Install
 
 ```bash
 pwd  # Should show current working directory
-cd .claude/skills/chrome-devtools/scripts
+cd $SKILL_DIR/.claude/skills/chrome-devtools/scripts
 ./install.sh  # Auto-checks dependencies and installs
 ```
 

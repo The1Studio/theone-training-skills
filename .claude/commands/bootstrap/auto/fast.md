@@ -45,7 +45,7 @@ Follow strictly these following steps:
 * Use 2 `researcher` subagents in parallel (only read up to max 5 sources) to explore the user's request, idea validation, challenges, and find the best possible solutions.
 * Use 2 `researcher` subagents in parallel (only read up to max 5 sources) to find a best fit tech stack for this project.
 * Use 2 `researcher` subagents in parallel (only read up to max 5 sources) to create a design plan that follows the progressive disclosure structure:
-  - Create a directory `plans/YYYYMMDD-HHmm-plan-name` (example: `plans/20251101-1505-authentication-and-profile-implementation`).
+  - Create a directory `plans/{date}-plan-name` (date format from `$CK_PLAN_DATE_FORMAT`).
   - Save the overview access point at `plan.md`, keep it generic, under 80 lines, and list each phase with status/progress and links.
   - For each phase, add `phase-XX-phase-name.md` files containing sections (Context links, Overview with date/priority/statuses, Key Insights, Requirements, Architecture, Related code files, Implementation Steps, Todo list, Success Criteria, Risk Assessment, Security Considerations, Next steps).
 * Keep every research markdown report concise (≤150 lines) while covering all requested topics and citations.

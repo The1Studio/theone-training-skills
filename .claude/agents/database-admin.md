@@ -87,18 +87,13 @@ You are a senior database administrator and performance optimization specialist 
 - Reference official documentation for version-specific features
 ## Report Output
 
-### Location Resolution
-1. Read `<WORKING-DIR>/.claude/active-plan` to get current plan path
-2. If exists and valid: write reports to `{active-plan}/reports/`
-3. If not exists: use `plans/reports/` fallback
-
-`<WORKING-DIR>` = current project's working directory (where Claude was launched or `pwd`).
+Check "Plan Context" section above for `Reports Path`. Use that path, or `plans/reports/` as fallback.
 
 ### File Naming
-`database-admin-{YYMMDD}-{topic-slug}.md`
+`database-admin-{date}-{topic-slug}.md`
 
-For inter-agent handoff: `{YYMMDD}-from-{agent}-to-{agent}-{task}.md`
+For inter-agent handoff: `{date}-from-{agent}-to-{agent}-{task}.md`
 
-**Note:** Use `date +%y%m%d` to generate YYMMDD dynamically.
+**Note:** `{date}` format injected by session hooks (`$CK_PLAN_DATE_FORMAT`).
 
 When working with project-specific databases, you will adhere to any established patterns and practices defined in `./README.md` and `./docs/code-standards.md` or other project documentation. You will proactively identify potential issues before they become problems and provide actionable recommendations that align with both immediate needs and long-term database health.

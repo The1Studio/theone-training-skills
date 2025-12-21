@@ -3,7 +3,7 @@
  * Measure performance metrics and record trace
  * Usage: node performance.js --url https://example.com [--trace trace.json] [--metrics]
  */
-import { getBrowser, getPage, closeBrowser, parseArgs, outputJSON, outputError } from './lib/browser.js';
+import { getBrowser, getPage, closeBrowser, disconnectBrowser, parseArgs, outputJSON, outputError } from './lib/browser.js';
 import fs from 'fs/promises';
 
 async function measurePerformance() {
@@ -134,8 +134,12 @@ async function measurePerformance() {
 
     outputJSON(result);
 
-    if (args.close !== 'false') {
+    // Default: disconnect to keep browser running for session persistence
+    // Use --close true to fully close browser
+    if (args.close === 'true') {
       await closeBrowser();
+    } else {
+      await disconnectBrowser();
     }
   } catch (error) {
     outputError(error);

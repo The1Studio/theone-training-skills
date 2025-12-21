@@ -25,7 +25,7 @@ argument-hint: [issues]
 - Read `plan.md` for dependency graph
 - Launch multiple `fullstack-developer` agents in PARALLEL for independent fixes
   - Example: "Fix auth + Fix payments + Fix UI" → launch 3 agents simultaneously
-  - Pass phase file path: `plans/YYYYMMDD-HHmm-plan-name/phase-XX-*.md`
+  - Pass phase file path: `plans/{date}-plan-name/phase-XX-*.md`
   - Include environment info
 - Wait for all parallel fixes complete before dependent fixes
 - Sequential fixes: launch one agent at a time

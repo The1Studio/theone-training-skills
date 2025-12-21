@@ -3,7 +3,7 @@
  * Get DOM snapshot with selectors
  * Usage: node snapshot.js [--url https://example.com] [--output snapshot.json]
  */
-import { getBrowser, getPage, closeBrowser, parseArgs, outputJSON, outputError } from './lib/browser.js';
+import { getBrowser, getPage, closeBrowser, disconnectBrowser, parseArgs, outputJSON, outputError } from './lib/browser.js';
 import fs from 'fs/promises';
 
 async function snapshot() {
@@ -120,8 +120,12 @@ async function snapshot() {
       outputJSON(result);
     }
 
-    if (args.close !== 'false') {
+    // Default: disconnect to keep browser running for session persistence
+    // Use --close true to fully close browser
+    if (args.close === 'true') {
       await closeBrowser();
+    } else {
+      await disconnectBrowser();
     }
   } catch (error) {
     outputError(error);

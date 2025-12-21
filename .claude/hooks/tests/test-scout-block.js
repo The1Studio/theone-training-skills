@@ -83,7 +83,7 @@ const testCases = [
 
 console.log('Testing scout-block.sh hook...\n');
 
-const scriptPath = path.join(__dirname, '..', 'scout-block.sh');
+const scriptPath = path.join(__dirname, '..', 'scout-block', 'scout-block.sh');
 let passed = 0;
 let failed = 0;
 

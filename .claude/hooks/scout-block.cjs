@@ -58,7 +58,7 @@ try {
 
   if (platform === 'win32') {
     // Windows: Use PowerShell implementation
-    const psScript = path.join(scriptDir, 'scout-block.ps1');
+    const psScript = path.join(scriptDir, 'scout-block', 'scout-block.ps1');
 
     // Check if PowerShell script exists
     if (!fs.existsSync(psScript)) {
@@ -74,7 +74,7 @@ try {
     });
   } else {
     // Unix (Linux, macOS, WSL): Use bash implementation
-    const bashScript = path.join(scriptDir, 'scout-block.sh');
+    const bashScript = path.join(scriptDir, 'scout-block', 'scout-block.sh');
 
     // Check if bash script exists
     if (!fs.existsSync(bashScript)) {

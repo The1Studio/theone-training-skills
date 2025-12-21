@@ -177,10 +177,9 @@ def main():
             refs = '📚' if skill['has_references'] else '  '
             print(f"  {scripts}{refs} {skill['name']:30} {skill['description'][:80]}")
 
-    # Output JSON for processing
-    import json
-    output_path = Path('.claude/scripts/skills_data.json')
-    output_path.write_text(json.dumps(skills, indent=2))
+    # Output YAML for processing (generate_catalogs.py reads YAML)
+    output_path = Path('.claude/scripts/skills_data.yaml')
+    output_path.write_text(yaml.dump(skills, allow_unicode=True, default_flow_style=False))
     print(f"\n✓ Saved metadata to {output_path}")
 
 if __name__ == '__main__':
